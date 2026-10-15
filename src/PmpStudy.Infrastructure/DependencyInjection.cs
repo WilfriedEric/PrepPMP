@@ -37,7 +37,7 @@ public static class DependencyInjection
         // Contexte « scoped » pour ASP.NET Core Identity.
         services.AddScoped<AppDbContext>(sp => sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
-        var zoneId = config["Study:TimeZone"] ?? "Europe/Paris";
+        var zoneId = config["Study:TimeZone"] ?? "Africa/Abidjan";
         var zone = TimeZoneInfo.TryFindSystemTimeZoneById(zoneId, out var z) ? z : TimeZoneInfo.Utc;
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IStudyClock>(sp => new StudyClock(sp.GetRequiredService<TimeProvider>(), zone));

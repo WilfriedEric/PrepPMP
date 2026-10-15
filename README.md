@@ -72,7 +72,7 @@ Toutes les routes exigent la connexion : `GET /api/plan/today`, `GET /api/course
 | `ConnectionStrings:DefaultConnection` | `DataSource=App_Data/pmpstudy.db` | chaîne Azure SQL (Key Vault) |
 | `Storage:Provider` | `Local` | `Blob` |
 | `ConnectionStrings:Blob`, `Storage:Container` | — | compte de stockage, conteneur privé |
-| `Study:TimeZone` | `Europe/Paris` | à ajuster à ton fuseau |
+| `Study:TimeZone` | `Africa/Abidjan` (GMT, sans heure d'été) | idem |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | — | active Application Insights |
 
 Les migrations existent pour les deux fournisseurs (`Migrations/Sqlite`, `Migrations/SqlServer`) et s'appliquent au démarrage. Pour en ajouter :

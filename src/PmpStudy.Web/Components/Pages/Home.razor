@@ -1,0 +1,226 @@
+﻿@page "/"
+@inject StudyService Study
+@inject SessionService Sessions
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Aujourd'hui — PMP Study</PageTitle>
+
+@if (today is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-4">
+    <MudText Typo="Typo.h4">@today.Date.ToString("dddd d MMMM", Fr)</MudText>
+    <MudSpacer />
+    <MudChip T="string" Color="Color.Secondary" Icon="@Icons.Material.Filled.Event">
+        Examen dans @today.DaysToExam j (@today.ExamDate.ToString("d MMM", Fr))
+    </MudChip>
+    @if (today.NextSimulation is { } sim)
+    {
+        <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Assignment">
+            Simulation le @sim.ToString("d MMM", Fr) (J-@(sim.DayNumber - today.Date.DayNumber))
+        </MudChip>
+    }
+</MudStack>
+
+@if (today.OpenSession is { } open)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4" ContentAlignment="HorizontalAlignment.Left">
+        Une session est en cours : <b>@open.Title</b>.
+        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                   Href="@(open.Type == SessionType.Exam ? $"examen/{open.Id}" : $"session/{open.Id}")">Reprendre</MudButton>
+    </MudAlert>
+}
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="1" Class="h-100">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Plan du jour</MudText>
+                    @if (today.PlanDay is { } d)
+                    {
+                        <MudText Typo="Typo.caption">Semaine @d.Week · @ReportService.StatusLabel(d.Status)</MudText>
+                    }
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (today.PlanDay is not { } day)
+                {
+                    <MudText>Pas de plan pour aujourd'hui.</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-2">
+                        Importe le plan de révision dans <MudLink Href="admin/import">Import et réglages</MudLink>.
+                    </MudText>
+                }
+                else
+                {
+                    @if (!string.IsNullOrWhiteSpace(day.Label))
+                    {
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">@day.Label</MudText>
+                    }
+                    <MudList T="string" Dense="true" ReadOnly="true">
+                        <MudListItem Icon="@(today.PagesDone ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.MenuBook)"
+                                     IconColor="@(today.PagesDone ? Color.Success : Color.Default)">
+                            @if (day.PageFrom is { } from && day.PageTo is { } to)
+                            {
+                                <span>Lire les pages <b>@from à @to</b> (@(to - from + 1) p.)</span>
+                            }
+                            else
+                            {
+                                <span>Pas de lecture prévue</span>
+                            }
+                        </MudListItem>
+                        <MudListItem Icon="@(today.QuestionsDone ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.QuestionAnswer)"
+                                     IconColor="@(today.QuestionsDone ? Color.Success : Color.Default)">
+                            Questions : <b>@today.QuestionsAnsweredToday / @day.QuestionGoal</b>
+                        </MudListItem>
+                    </MudList>
+                    @if (day.Chapters.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mt-2">Chapitres</MudText>
+                        @foreach (var c in day.Chapters)
+                        {
+                            <MudChip T="string" Size="Size.Small" OnClick="@(() => Nav.NavigateTo($"cours/{c.StartPage}"))">@c.Code @c.Title</MudChip>
+                        }
+                    }
+                    @if (day.EcoTasks.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mt-2">Tâches ECO</MudText>
+                        @foreach (var t in day.EcoTasks)
+                        {
+                            <MudTooltip Text="@t.Title"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@t.Code</MudChip></MudTooltip>
+                        }
+                    }
+                    <MudProgressLinear Class="mt-4" Color="Color.Success" Value="@DayProgress" Rounded="true" Size="Size.Medium" />
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.MenuBook" Href="@ResumeHref">
+                    @(today.LastPage is null ? "Ouvrir le cours" : "Reprendre la lecture")
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Timer" OnClick="StartDailyTraining" Disabled="busy">
+                    Entraînement du jour
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="1" Class="mb-4">
+            <MudCardHeader><CardHeaderContent><MudText Typo="Typo.h6">Carnet d'erreurs</MudText></CardHeaderContent></MudCardHeader>
+            <MudCardContent>
+                <MudStack Row="true" Spacing="6">
+                    <div><MudText Typo="Typo.h4" Color="@(today.ErrorsDue > 0 ? Color.Warning : Color.Default)">@today.ErrorsDue</MudText><MudText Typo="Typo.caption">à revoir aujourd'hui</MudText></div>
+                    <div><MudText Typo="Typo.h4">@today.ErrorsIncomplete</MudText><MudText Typo="Typo.caption">incomplètes</MudText></div>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="@(today.ErrorsDue == 0 || busy)" OnClick="ReplayDue" StartIcon="@Icons.Material.Filled.Replay">Rejouer mes erreurs</MudButton>
+                <MudButton Href="erreurs" Variant="Variant.Text">Ouvrir le carnet</MudButton>
+            </MudCardActions>
+        </MudCard>
+
+        <MudCard Elevation="1">
+            <MudCardHeader><CardHeaderContent><MudText Typo="Typo.h6">Aujourd'hui en chiffres</MudText></CardHeaderContent></MudCardHeader>
+            <MudCardContent>
+                <MudStack Row="true" Spacing="6" Wrap="Wrap.Wrap">
+                    <div><MudText Typo="Typo.h5">@Math.Round(today.ReadingMinutesToday) min</MudText><MudText Typo="Typo.caption">de lecture</MudText></div>
+                    <div><MudText Typo="Typo.h5">@today.QuestionsAnsweredToday</MudText><MudText Typo="Typo.caption">questions répondues</MudText></div>
+                    <div>
+                        <MudText Typo="Typo.h5">@(today.QuestionsAnsweredToday == 0 ? "—" : $"{100.0 * today.CorrectToday / today.QuestionsAnsweredToday:0} %")</MudText>
+                        <MudText Typo="Typo.caption">de réussite (sessions corrigées)</MudText>
+                    </div>
+                </MudStack>
+                @if (today.PagesReadToday.Count > 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mt-3">
+                        Pages PDF lues : @string.Join(", ", today.PagesReadToday.Select(r => r.From == r.To ? $"{r.From}" : $"{r.From}–{r.To}"))
+                    </MudText>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    @if (today.Week.Count > 0)
+    {
+        <MudItem xs="12">
+            <MudPaper Elevation="1" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Statut de la semaine</MudText>
+                <div class="week-strip">
+                    @foreach (var d in today.Week)
+                    {
+                        <div class="week-day @StatusCss(d) @(d.Date == today.Date ? "today" : "")">
+                            <div class="week-day-name">@d.Date.ToString("ddd", Fr)</div>
+                            <div class="week-day-num">@d.Date.Day</div>
+                            <div class="week-day-status">@ReportService.StatusLabel(d.Status)</div>
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+    private TodaySummary? today;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => today = await Study.TodayAsync();
+
+    private string ResumeHref => today?.LastPage is { } p ? $"cours/{p}"
+        : today?.PlanDay?.PageFrom is { } from ? $"cours/{from + today.PageOffset}" : "cours";
+
+    private double DayProgress
+    {
+        get
+        {
+            if (today?.PlanDay is not { } d) return 0;
+            var parts = 0.0;
+            parts += today.PagesDone ? 50 : 0;
+            parts += d.QuestionGoal == 0 ? 50 : Math.Min(50, 50.0 * today.QuestionsAnsweredToday / d.QuestionGoal);
+            return parts;
+        }
+    }
+
+    private static string StatusCss(StudyPlanDay d) => d.Status switch
+    {
+        PlanDayStatus.Done => "done",
+        PlanDayStatus.InProgress => "progress",
+        PlanDayStatus.Skipped => "skipped",
+        _ => "",
+    };
+
+    private async Task StartDailyTraining()
+    {
+        busy = true;
+        try
+        {
+            var remaining = today?.PlanDay is { } d ? Math.Max(10, d.QuestionGoal - today.QuestionsAnsweredToday) : 20;
+            var id = await Sessions.CreateTrainingAsync(new TrainingRequest
+            {
+                Count = remaining,
+                EcoTasks = today?.PlanDay?.EcoTasks.Select(t => t.Code).ToList() ?? [],
+            });
+            Nav.NavigateTo($"session/{id}");
+        }
+        catch (SessionException)
+        {
+            // Pas assez de questions sur les tâches du jour : entraînement sans filtre.
+            try { Nav.NavigateTo($"session/{await Sessions.CreateTrainingAsync(new TrainingRequest { Count = 20 })}"); }
+            catch (SessionException ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        }
+        finally { busy = false; }
+    }
+
+    private async Task ReplayDue()
+    {
+        busy = true;
+        try { Nav.NavigateTo($"session/{await Sessions.CreateErrorReplayAsync(dueOnly: true)}"); }
+        catch (SessionException ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        finally { busy = false; }
+    }
+}

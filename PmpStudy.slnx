@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PmpStudy.Core/PmpStudy.Core.csproj" />
+    <Project Path="src/PmpStudy.Infrastructure/PmpStudy.Infrastructure.csproj" />
+    <Project Path="src/PmpStudy.Web/PmpStudy.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PmpStudy.Tests/PmpStudy.Tests.csproj" />
+  </Folder>
+</Solution>

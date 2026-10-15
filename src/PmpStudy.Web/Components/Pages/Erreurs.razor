@@ -1,0 +1,197 @@
+@page "/erreurs"
+@inject ErrorLogService Errors
+@inject SessionService Sessions
+@inject ContentService Content
+@inject IStudyClock Clock
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Carnet d'erreurs — PMP Study</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-4">
+    <MudText Typo="Typo.h4">Carnet d'erreurs</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Replay" OnClick="() => Replay(true)" Disabled="@(counts.Due == 0)">
+        Rejouer les erreurs dues (@counts.Due)
+    </MudButton>
+    <MudButton Variant="Variant.Outlined" OnClick="() => Replay(false)" Disabled="@(counts.Active == 0)">Rejouer toutes les actives</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => adding = !adding">Erreur externe</MudButton>
+</MudStack>
+
+<MudText Typo="Typo.body2" Class="mb-3">
+    Revue à J+1, J+3, J+7 puis J+14 ; une erreur remet le compteur à J+1, deux bonnes réponses de suite passent l'entrée en « maîtrisée ».
+</MudText>
+
+@if (adding)
+{
+    <MudPaper Elevation="1" Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6">Erreur faite ailleurs (PMI Study Hall, livre…)</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="8"><MudTextField @bind-Value="draft.Summary" Label="Résumé de la question et de la bonne réponse" Lines="3" AutoGrow="true" Required="true" /></MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="draft.Source" Label="Source" Placeholder="PMI Study Hall — mini-examen 3" />
+                <MudSelect T="int?" @bind-Value="draft.EcoTaskId" Label="Tâche ECO" Clearable="true">
+                    @foreach (var t in ecoTasks) { <MudSelectItem T="int?" Value="t.Id">@t.Code — @t.Title</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="draft.Why" Label="Pourquoi" Lines="2" AutoGrow="true" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="draft.Trap" Label="Piège" Lines="2" AutoGrow="true" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="draft.Reflex" Label="Réflexe mindset" Lines="2" AutoGrow="true" /></MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="AddExternal" Disabled="@string.IsNullOrWhiteSpace(draft.Summary)">Ajouter</MudButton>
+    </MudPaper>
+}
+
+<MudPaper Elevation="1" Class="pa-2 mb-3">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudChipSet T="ErrorFilter" SelectedValue="filter" SelectedValueChanged="OnFilter" CheckMark="true" SelectionMode="SelectionMode.SingleSelection">
+            <MudChip T="ErrorFilter" Value="ErrorFilter.Due">À revoir (@counts.Due)</MudChip>
+            <MudChip T="ErrorFilter" Value="ErrorFilter.Incomplete">Incomplètes (@counts.Incomplete)</MudChip>
+            <MudChip T="ErrorFilter" Value="ErrorFilter.Active">Actives (@counts.Active)</MudChip>
+            <MudChip T="ErrorFilter" Value="ErrorFilter.Mastered">Maîtrisées (@counts.Mastered)</MudChip>
+            <MudChip T="ErrorFilter" Value="ErrorFilter.All">Toutes</MudChip>
+        </MudChipSet>
+        <MudSpacer />
+        <MudTextField T="string" Value="search" ValueChanged="OnSearch" Placeholder="Rechercher" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true" DebounceInterval="300" Margin="Margin.Dense" Clearable="true" Style="max-width: 280px" />
+    </MudStack>
+</MudPaper>
+
+@if (entries.Count == 0)
+{
+    <MudText><em>Rien dans cette vue.</em></MudText>
+}
+
+<MudExpansionPanels MultiExpansion="true" Elevation="1">
+    @foreach (var e in entries)
+    {
+        <MudExpansionPanel>
+            <TitleContent>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                    @if (e.EcoTask is not null) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@e.EcoTask.Code</MudChip> }
+                    <MudText Typo="Typo.body2" Class="error-title">@Title(e)</MudText>
+                    <MudSpacer />
+                    @if (e.IsIncomplete) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">incomplète</MudChip> }
+                    @if (e.Status == ErrorStatus.Mastered)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">maîtrisée</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="@(e.NextReview <= today ? Color.Error : Color.Default)">revue @e.NextReview.ToString("dd/MM")</MudChip>
+                    }
+                    <MudText Typo="Typo.caption">×@e.TimesWrong</MudText>
+                </MudStack>
+            </TitleContent>
+            <ChildContent>
+                @if (e.Question is not null)
+                {
+                    <QuestionView Question="e.Question" ReadOnly="true" ShowCorrection="true" IsCorrect="false" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Style="white-space: pre-line">@e.Summary</MudText>
+                    <MudText Typo="Typo.caption">Source : @(e.ExternalSource ?? "externe")</MudText>
+                }
+                <MudGrid Spacing="2" Class="mt-2">
+                    <MudItem xs="12" md="4"><MudTextField @bind-Value="e.Why" Label="Pourquoi" Lines="2" AutoGrow="true" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="12" md="4"><MudTextField @bind-Value="e.Trap" Label="Piège" Lines="2" AutoGrow="true" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="12" md="4"><MudTextField @bind-Value="e.MindsetReflex" Label="Réflexe mindset" Lines="2" AutoGrow="true" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudSelect T="int?" @bind-Value="e.EcoTaskId" Label="Tâche ECO" Clearable="true" Margin="Margin.Dense">
+                            @foreach (var t in ecoTasks) { <MudSelectItem T="int?" Value="t.Id">@t.Code — @t.Title</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+                <MudText Typo="Typo.caption" Class="d-block mt-2">
+                    Revues : @e.ReviewCount · bonnes réponses de suite : @e.ConsecutiveCorrect · créée le @Clock.ToLocal(e.CreatedUtc).ToString("dd/MM")
+                </MudText>
+                <MudStack Row="true" Class="mt-2" Wrap="Wrap.Wrap">
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Save(e)">Enregistrer</MudButton>
+                    @if (e.Origin == ErrorOrigin.External && e.Status == ErrorStatus.Active)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="() => Review(e, true)">Je savais</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="() => Review(e, false)">Je ne savais pas</MudButton>
+                    }
+                    @if (e.Status == ErrorStatus.Mastered)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => Reactivate(e)">Remettre en revue</MudButton>
+                    }
+                    <MudSpacer />
+                    <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => Delete(e)">Supprimer</MudButton>
+                </MudStack>
+            </ChildContent>
+        </MudExpansionPanel>
+    }
+</MudExpansionPanels>
+
+@code {
+    private ErrorFilter filter = ErrorFilter.Due;
+    private string? search;
+    private List<ErrorEntry> entries = [];
+    private List<EcoTask> ecoTasks = [];
+    private (int Due, int Incomplete, int Active, int Mastered) counts;
+    private DateOnly today;
+    private bool adding;
+    private Draft draft = new();
+
+    private class Draft
+    {
+        public string? Summary { get; set; }
+        public string? Source { get; set; } = "PMI Study Hall";
+        public int? EcoTaskId { get; set; }
+        public string? Why { get; set; }
+        public string? Trap { get; set; }
+        public string? Reflex { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        today = Clock.Today;
+        ecoTasks = await Content.EcoTasksAsync();
+        await Load();
+        if (counts.Due == 0 && entries.Count == 0) { filter = ErrorFilter.Active; await Load(); }
+    }
+
+    private async Task Load()
+    {
+        counts = await Errors.CountsAsync();
+        entries = await Errors.ListAsync(filter, search);
+    }
+
+    private async Task OnFilter(ErrorFilter f) { filter = f; await Load(); }
+    private async Task OnSearch(string? s) { search = s; await Load(); }
+
+    private static string Title(ErrorEntry e)
+    {
+        var t = e.Question?.Stem ?? e.Summary ?? "(sans résumé)";
+        return t.Length > 140 ? t[..137] + "…" : t;
+    }
+
+    private async Task Save(ErrorEntry e)
+    {
+        await Errors.SaveDetailsAsync(e.Id, e.Why, e.Trap, e.MindsetReflex, e.EcoTaskId, e.Origin == ErrorOrigin.External ? e.Summary : null);
+        Snackbar.Add("Enregistré", Severity.Success);
+        counts = await Errors.CountsAsync();
+    }
+
+    private async Task Review(ErrorEntry e, bool knewIt) { await Errors.ReviewManuallyAsync(e.Id, knewIt); await Load(); }
+    private async Task Reactivate(ErrorEntry e) { await Errors.ReactivateAsync(e.Id); await Load(); }
+    private async Task Delete(ErrorEntry e) { await Errors.DeleteAsync(e.Id); await Load(); }
+
+    private async Task AddExternal()
+    {
+        await Errors.AddExternalAsync(draft.Summary!, draft.Source, draft.EcoTaskId, draft.Why, draft.Trap, draft.Reflex);
+        draft = new Draft();
+        adding = false;
+        filter = ErrorFilter.Active;
+        await Load();
+        Snackbar.Add("Erreur ajoutée au carnet (revue demain)", Severity.Success);
+    }
+
+    private async Task Replay(bool dueOnly)
+    {
+        try { Nav.NavigateTo($"session/{await Sessions.CreateErrorReplayAsync(dueOnly)}"); }
+        catch (SessionException ex) { Snackbar.Add(ex.Message, Severity.Info); }
+    }
+}

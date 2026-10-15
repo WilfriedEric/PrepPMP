@@ -1,0 +1,111 @@
+@page "/notes"
+@inject NoteService NoteService
+@inject ContentService Content
+@inject IJSRuntime JS
+
+<PageTitle>Notes — PMP Study</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4">Notes</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="Export">Exporter en Markdown</MudButton>
+</MudStack>
+
+<MudPaper Elevation="1" Class="pa-3 mb-4">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="query.Text" Label="Recherche" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" DebounceInterval="300" OnDebounceIntervalElapsed="Load" Clearable="true" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="4" md="3">
+            <MudSelect T="int?" Value="query.ChapterId" ValueChanged="v => { query.ChapterId = v; return Load(); }" Label="Chapitre" Clearable="true" Margin="Margin.Dense">
+                @foreach (var c in chapters)
+                {
+                    <MudSelectItem T="int?" Value="c.Id">@c.Code @c.Title</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="4" md="3">
+            <MudSelect T="int?" Value="query.EcoTaskId" ValueChanged="v => { query.EcoTaskId = v; return Load(); }" Label="Tâche ECO" Clearable="true" Margin="Margin.Dense">
+                @foreach (var t in ecoTasks)
+                {
+                    <MudSelectItem T="int?" Value="t.Id">@t.Code — @t.Title</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="4" md="2">
+            <MudSelect T="string" Value="query.Tag" ValueChanged="v => { query.Tag = v; return Load(); }" Label="Étiquette" Clearable="true" Margin="Margin.Dense">
+                @foreach (var tag in tags)
+                {
+                    <MudSelectItem T="string" Value="tag">@tag</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudText Typo="Typo.body2" Class="mb-2">@notes.Count note(s)</MudText>
+
+<MudGrid Spacing="2">
+    @foreach (var note in notes)
+    {
+        <MudItem xs="12" md="6" xl="4">
+            <MudCard Outlined="true" Class="h-100">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                            @if (note.Page is { } p)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Href="@($"cours/{p}")">p. @p</MudChip>
+                            }
+                            @if (note.Chapter is not null) { <MudChip T="string" Size="Size.Small">@note.Chapter.Code</MudChip> }
+                            @if (note.EcoTask is not null) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@note.EcoTask.Code</MudChip> }
+                        </MudStack>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => Delete(note)" aria-label="Supprimer" />
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <div class="markdown">@Markdown.Render(note.Content)</div>
+                    @if (!string.IsNullOrWhiteSpace(note.Tags))
+                    {
+                        <MudText Typo="Typo.caption">@note.Tags</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    }
+</MudGrid>
+
+@if (notes.Count == 0)
+{
+    <MudText><em>Aucune note. Les notes se prennent depuis le <MudLink Href="cours">lecteur de cours</MudLink>, page par page.</em></MudText>
+}
+
+@code {
+    private readonly NoteQuery query = new();
+    private List<Note> notes = [];
+    private List<Chapter> chapters = [];
+    private List<EcoTask> ecoTasks = [];
+    private List<string> tags = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        chapters = await Content.ChaptersAsync();
+        ecoTasks = await Content.EcoTasksAsync();
+        tags = await NoteService.AllTagsAsync();
+        await Load();
+    }
+
+    private async Task Load() => notes = await NoteService.ListAsync(query);
+
+    private async Task Delete(Note note)
+    {
+        await NoteService.DeleteAsync(note.Id);
+        await Load();
+    }
+
+    private async Task Export() =>
+        await JS.InvokeVoidAsync("pmpStudy.download", "notes-pmp.md", "text/markdown", NoteService.ToMarkdown(notes));
+}

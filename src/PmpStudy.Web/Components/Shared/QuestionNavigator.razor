@@ -1,0 +1,35 @@
+<div class="qnav">
+    @foreach (var (item, i) in Items.Select((it, i) => (it, i)))
+    {
+        <button type="button" class="@Css(item, i)" @onclick="() => OnSelect.InvokeAsync(i)" title="@Title(item)">
+            @item.Order
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SessionItem> Items { get; set; } = [];
+    [Parameter] public int Current { get; set; }
+    [Parameter] public bool RevealCorrectness { get; set; }
+    [Parameter] public EventCallback<int> OnSelect { get; set; }
+
+    private string Css(SessionItem item, int index)
+    {
+        var css = "qnav-item";
+        if (index == Current) css += " current";
+        if (item.AnswerJson is { Length: > 2 }) css += " answered";
+        if (RevealCorrectness && item.AnsweredUtc is not null) css += item.IsCorrect == true ? " ok" : " ko";
+        if (item.Flagged) css += " flagged";
+        if (item.Doubt) css += " doubt";
+        return css;
+    }
+
+    private static string Title(SessionItem item)
+    {
+        var parts = new List<string>();
+        parts.Add(item.AnswerJson is { Length: > 2 } ? "répondue" : "sans réponse");
+        if (item.Flagged) parts.Add("à revoir");
+        if (item.Doubt) parts.Add("doute");
+        return string.Join(", ", parts);
+    }
+}

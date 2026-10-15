@@ -1,0 +1,167 @@
+@page "/session/{Id:int}"
+@inject SessionService Sessions
+@inject IStudyClock Clock
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>@(session?.Title ?? "Session")</PageTitle>
+
+@if (session is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+    <MudText Typo="Typo.h5">@session.Title</MudText>
+    <MudSpacer />
+    <MudText Typo="Typo.body2">@Answered / @session.Items.Count répondues</MudText>
+    <Countdown Remaining="() => SessionClock.Remaining(session, Clock.UtcNow)" OnExpired="Expired" />
+    <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="ConfirmFinish" Disabled="busy">Terminer</MudButton>
+</MudStack>
+
+<MudGrid Spacing="2">
+    <MudItem xs="12" md="9">
+        <MudPaper Elevation="1" Class="pa-4 question-card">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudText Typo="Typo.overline">Question @(index + 1) / @session.Items.Count</MudText>
+                <MudSpacer />
+                <MudToggleIconButton Toggled="item.Flagged" ToggledChanged="v => Mark(v, item.Doubt)" Icon="@Icons.Material.Outlined.Flag"
+                                     ToggledIcon="@Icons.Material.Filled.Flag" ToggledColor="Color.Warning" title="À revoir" Disabled="Locked" />
+                <MudChip T="string" Size="Size.Small" Color="@(item.Doubt ? Color.Secondary : Color.Default)" Variant="@(item.Doubt ? Variant.Filled : Variant.Outlined)"
+                         OnClick="() => Mark(item.Flagged, !item.Doubt)" Disabled="Locked">Doute</MudChip>
+            </MudStack>
+
+            <QuestionView Question="item.Question!" Selected="selected" SelectedChanged="OnSelected" ReadOnly="@(Locked || revealed)"
+                          ShowCorrection="revealed" IsCorrect="item.IsCorrect" />
+
+            <MudStack Row="true" Class="mt-4" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ChevronLeft" OnClick="() => Show(index - 1)" Disabled="@(index == 0)">Précédente</MudButton>
+                <MudSpacer />
+                @if (session.FeedbackMode == FeedbackMode.Immediate && !revealed)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Validate" Disabled="@(selected.Count == 0 || busy || Locked)">Valider</MudButton>
+                }
+                @if (index < session.Items.Count - 1)
+                {
+                    <MudButton Variant="@(revealed || session.FeedbackMode == FeedbackMode.AtEnd ? Variant.Filled : Variant.Text)" Color="Color.Primary"
+                               EndIcon="@Icons.Material.Filled.ChevronRight" OnClick="() => Show(index + 1)">Suivante</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="ConfirmFinish" Disabled="busy">Terminer la session</MudButton>
+                }
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudPaper Elevation="1" Class="pa-3">
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Navigation</MudText>
+            <QuestionNavigator Items="items" Current="index" RevealCorrectness="@(session.FeedbackMode == FeedbackMode.Immediate)" OnSelect="Show" />
+            <MudText Typo="Typo.caption" Class="mt-2 d-block">Drapeau : à revoir · bordure violette : doute</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private StudySession? session;
+    private List<SessionItem> items = [];
+    private int index;
+    private SessionItem item => items[index];
+    private IReadOnlyCollection<int> selected = [];
+    private DateTime shownAt = DateTime.UtcNow;
+    private bool busy;
+    private bool Locked => session?.IsFinished == true;
+    private bool revealed => session?.FeedbackMode == FeedbackMode.Immediate && item.AnsweredUtc is not null;
+    private int Answered => items.Count(i => i.AnswerJson is { Length: > 2 });
+
+    protected override async Task OnInitializedAsync()
+    {
+        session = await Sessions.GetAsync(Id);
+        if (session is null) { Nav.NavigateTo("entrainement"); return; }
+        if (session.Type == SessionType.Exam) { Nav.NavigateTo($"examen/{Id}", replace: true); return; }
+        if (session.IsFinished) { Nav.NavigateTo($"session/{Id}/resultats", replace: true); return; }
+        items = session.Items.OrderBy(i => i.Order).ToList();
+        // Reprise : première question sans réponse.
+        var firstOpen = items.FindIndex(i => i.AnswerJson is not { Length: > 2 });
+        LoadItem(firstOpen < 0 ? 0 : firstOpen);
+    }
+
+    private void LoadItem(int i)
+    {
+        index = Math.Clamp(i, 0, items.Count - 1);
+        selected = Scoring.ParseAnswer(item.AnswerJson).ToList();
+        shownAt = DateTime.UtcNow;
+    }
+
+    private int TakeElapsed()
+    {
+        var elapsed = (int)(DateTime.UtcNow - shownAt).TotalSeconds;
+        shownAt = DateTime.UtcNow;
+        return elapsed;
+    }
+
+    private async Task Show(int i)
+    {
+        if (i < 0 || i >= items.Count || i == index) return;
+        if (!Locked) await Sessions.AddTimeAsync(Id, item.Id, TakeElapsed());
+        LoadItem(i);
+    }
+
+    private async Task OnSelected(IReadOnlyCollection<int> value)
+    {
+        selected = value;
+        // En correction de fin de session, chaque choix est enregistré immédiatement.
+        if (session!.FeedbackMode == FeedbackMode.AtEnd) await Save();
+    }
+
+    private async Task Validate() => await Save();
+
+    private async Task Save()
+    {
+        busy = true;
+        try
+        {
+            var result = await Sessions.AnswerAsync(Id, item.Id, selected, TakeElapsed());
+            if (result.SessionFinished) { Nav.NavigateTo($"session/{Id}/resultats"); return; }
+            if (!result.Accepted) { Snackbar.Add(result.Error ?? "Réponse refusée", Severity.Warning); return; }
+            item.AnswerJson = Scoring.SerializeAnswer(selected);
+            item.AnsweredUtc = selected.Count > 0 ? Clock.UtcNow : null;
+            item.IsCorrect = result.IsCorrect;
+        }
+        finally { busy = false; }
+    }
+
+    private async Task Mark(bool flagged, bool doubt)
+    {
+        var error = await Sessions.SetMarksAsync(Id, item.Id, flagged, doubt);
+        if (error is not null) { Snackbar.Add(error, Severity.Warning); return; }
+        item.Flagged = flagged;
+        item.Doubt = doubt;
+    }
+
+    private async Task ConfirmFinish()
+    {
+        var unanswered = items.Count - Answered;
+        var message = unanswered > 0 ? $"{unanswered} question(s) sans réponse compteront comme fausses. Terminer ?" : "Terminer la session et voir la correction ?";
+        var ok = await Dialogs.ShowMessageBox("Terminer la session", message, yesText: "Terminer", cancelText: "Continuer");
+        if (ok == true) await Finish();
+    }
+
+    private async Task Finish()
+    {
+        busy = true;
+        if (!Locked) await Sessions.AddTimeAsync(Id, item.Id, TakeElapsed());
+        await Sessions.FinishAsync(Id);
+        Nav.NavigateTo($"session/{Id}/resultats");
+    }
+
+    private async Task Expired()
+    {
+        Snackbar.Add("Temps écoulé : la session est clôturée.", Severity.Info);
+        await Finish();
+    }
+}

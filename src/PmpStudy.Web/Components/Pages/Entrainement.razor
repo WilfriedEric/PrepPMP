@@ -1,0 +1,148 @@
+@page "/entrainement"
+@inject SessionService Sessions
+@inject ContentService Content
+@inject IStudyClock Clock
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Entraînement — PMP Study</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Entraînement chronométré</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Nouvelle session</MudText>
+            <MudSelect T="Domain?" Value="request.Domain" ValueChanged="OnDomainChanged" Label="Domaine" Clearable="true" Margin="Margin.Dense">
+                @foreach (var d in Enum.GetValues<Domain>())
+                {
+                    <MudSelectItem T="Domain?" Value="d">@Scoring.Label(d)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="string" MultiSelection="true" SelectedValues="request.EcoTasks" SelectedValuesChanged="OnTasksChanged"
+                       Label="Tâches ECO" Clearable="true" Margin="Margin.Dense" Class="mt-2" MultiSelectionTextFunc="@(list => string.Join(", ", list))">
+                @foreach (var t in ecoTasks.Where(t => request.Domain is null || t.Domain == request.Domain))
+                {
+                    <MudSelectItem T="string" Value="t.Code">@t.Code — @t.Title</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Approach?" Value="request.Approach" ValueChanged="v => { request.Approach = v; return Recount(); }" Label="Approche" Clearable="true" Margin="Margin.Dense" Class="mt-2">
+                @foreach (var a in Enum.GetValues<Approach>())
+                {
+                    <MudSelectItem T="Approach?" Value="a">@Scoring.Label(a)</MudSelectItem>
+                }
+            </MudSelect>
+            @if (chapters.Count > 0)
+            {
+                <MudSelect T="int?" Value="request.ChapterId" ValueChanged="v => { request.ChapterId = v; return Recount(); }" Label="Chapitre" Clearable="true" Margin="Margin.Dense" Class="mt-2">
+                    @foreach (var c in chapters)
+                    {
+                        <MudSelectItem T="int?" Value="c.Id">@c.Code @c.Title</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudSelect T="string" Value="request.Source" ValueChanged="v => { request.Source = v; return Recount(); }" Label="Source" Clearable="true" Margin="Margin.Dense" Class="mt-2">
+                @foreach (var s in sources)
+                {
+                    <MudSelectItem T="string" Value="s">@s</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudGrid Spacing="2" Class="mt-2">
+                <MudItem xs="6">
+                    <MudNumericField @bind-Value="request.Count" Label="Nombre de questions" Min="1" Max="180" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudNumericField @bind-Value="request.SecondsPerQuestion" Label="Secondes par question" Min="20" Max="600" Margin="Margin.Dense"
+                                     HelperText="80 s = rythme de l'examen" />
+                </MudItem>
+            </MudGrid>
+            <MudRadioGroup T="FeedbackMode" @bind-Value="request.FeedbackMode" Class="mt-2">
+                <MudRadio T="FeedbackMode" Value="FeedbackMode.Immediate">Correction immédiate</MudRadio>
+                <MudRadio T="FeedbackMode" Value="FeedbackMode.AtEnd">Correction en fin de session</MudRadio>
+            </MudRadioGroup>
+            <MudCheckBox @bind-Value="request.PreferUnseen" Label="Questions jamais vues en priorité" Dense="true" />
+
+            <MudText Typo="Typo.body2" Class="mt-2">
+                @matching question(s) correspondent · durée : @Countdown.Format(TimeSpan.FromSeconds(Math.Min(request.Count, matching) * request.SecondsPerQuestion))
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Start" Disabled="@(busy || matching == 0)"
+                       StartIcon="@Icons.Material.Filled.PlayArrow">Commencer</MudButton>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Sessions récentes</MudText>
+            @if (recent.Count == 0)
+            {
+                <MudText Typo="Typo.body2"><em>Aucune session pour l'instant.</em></MudText>
+            }
+            <MudList T="string" Dense="true">
+                @foreach (var s in recent)
+                {
+                    <MudListItem Href="@(s.IsFinished ? $"session/{s.Id}/resultats" : $"session/{s.Id}")">
+                        <MudStack Row="true" AlignItems="AlignItems.Center">
+                            <div>
+                                <MudText Typo="Typo.body2">@s.Title</MudText>
+                                <MudText Typo="Typo.caption">@Clock.ToLocal(s.StartUtc).ToString("dd/MM HH:mm")</MudText>
+                            </div>
+                            <MudSpacer />
+                            @if (s.IsFinished)
+                            {
+                                <LevelChip Level="Scoring.LevelFor(s.ScorePercent ?? 0)" />
+                                <MudText Typo="Typo.body2">@s.ScorePercent?.ToString("0.#") %</MudText>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info">En cours</MudChip>
+                            }
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private readonly TrainingRequest request = new();
+    private List<EcoTask> ecoTasks = [];
+    private List<Chapter> chapters = [];
+    private List<string> sources = [];
+    private List<StudySession> recent = [];
+    private int matching;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ecoTasks = await Content.EcoTasksAsync();
+        chapters = await Content.ChaptersAsync();
+        sources = await Content.SourcesAsync();
+        recent = (await Sessions.ListAsync(take: 30)).Where(s => s.Type != SessionType.Exam).ToList();
+        await Recount();
+    }
+
+    private async Task OnDomainChanged(Domain? domain)
+    {
+        request.Domain = domain;
+        request.EcoTasks = request.EcoTasks.Where(code => domain is null || ecoTasks.Any(t => t.Code == code && t.Domain == domain)).ToList();
+        await Recount();
+    }
+
+    private async Task OnTasksChanged(IEnumerable<string> codes)
+    {
+        request.EcoTasks = codes.ToList();
+        await Recount();
+    }
+
+    private async Task Recount() => matching = await Sessions.CountMatchingAsync(request);
+
+    private async Task Start()
+    {
+        busy = true;
+        try { Nav.NavigateTo($"session/{await Sessions.CreateTrainingAsync(request)}"); }
+        catch (SessionException ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        finally { busy = false; }
+    }
+}

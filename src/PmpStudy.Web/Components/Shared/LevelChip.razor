@@ -1,0 +1,13 @@
+<MudChip T="string" Size="Size.Small" Color="@ColorFor(Level)" Variant="Variant.Outlined">@Scoring.Label(Level)</MudChip>
+
+@code {
+    [Parameter] public PerformanceLevel Level { get; set; }
+
+    public static Color ColorFor(PerformanceLevel level) => level switch
+    {
+        PerformanceLevel.AboveTarget => Color.Success,
+        PerformanceLevel.Target => Color.Info,
+        PerformanceLevel.BelowTarget => Color.Warning,
+        _ => Color.Error,
+    };
+}

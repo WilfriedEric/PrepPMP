@@ -1,0 +1,26 @@
+@using Microsoft.AspNetCore.Identity
+@using PmpStudy.Infrastructure.Data
+@inject UserManager<ApplicationUser> Users
+@inject AuthenticationStateProvider Auth
+@inject IConfiguration Config
+
+@if (show)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
+        La double authentification n'est pas encore activée.
+        <MudLink Href="Account/Manage/EnableAuthenticator" Typo="Typo.body2">L'activer maintenant</MudLink>
+    </MudAlert>
+}
+
+@code {
+    private bool show;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Config.GetValue("Security:RemindTwoFactor", true)) return;
+        var state = await Auth.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated != true) return;
+        var user = await Users.GetUserAsync(state.User);
+        show = user is not null && !await Users.GetTwoFactorEnabledAsync(user);
+    }
+}

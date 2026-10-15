@@ -1,0 +1,156 @@
+@page "/bilan"
+@inject ReportService Reports
+@inject IStudyClock Clock
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Bilan — PMP Study</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Bilan</MudText>
+
+@if (stats is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudGrid>
+    <MudItem xs="6" md="3"><MudPaper Elevation="1" Class="pa-4 stat"><MudText Typo="Typo.h4">@stats.Answered</MudText><MudText Typo="Typo.caption">questions corrigées</MudText></MudPaper></MudItem>
+    <MudItem xs="6" md="3"><MudPaper Elevation="1" Class="pa-4 stat"><MudText Typo="Typo.h4">@stats.Percent.ToString("0.#") %</MudText><LevelChip Level="Scoring.LevelFor(stats.Percent)" /></MudPaper></MudItem>
+    <MudItem xs="6" md="3"><MudPaper Elevation="1" Class="pa-4 stat"><MudText Typo="Typo.h4">@stats.AverageSecondsPerQuestion.ToString("0") s</MudText><MudText Typo="Typo.caption">par question (cible 80 s)</MudText></MudPaper></MudItem>
+    <MudItem xs="6" md="3"><MudPaper Elevation="1" Class="pa-4 stat"><MudText Typo="Typo.h4">@stats.Exams.Count</MudText><MudText Typo="Typo.caption">examens blancs</MudText></MudPaper></MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6">Score par domaine</MudText>
+            @if (stats.ByDomain.Count > 0)
+            {
+                <MudChart ChartType="ChartType.Bar" ChartSeries="@Series("% justes", stats.ByDomain)" XAxisLabels="@stats.ByDomain.Select(l => l.Label).ToArray()"
+                          Width="100%" Height="260px" ChartOptions="percentOptions" />
+            }
+            <ScoreTable Title="Domaine" Lines="stats.ByDomain" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6">Score par approche</MudText>
+            @if (stats.ByApproach.Count > 0)
+            {
+                <MudChart ChartType="ChartType.Bar" ChartSeries="@Series("% justes", stats.ByApproach)" XAxisLabels="@stats.ByApproach.Select(l => l.Label).ToArray()"
+                          Width="100%" Height="260px" ChartOptions="percentOptions" />
+            }
+            <ScoreTable Title="Approche" Lines="stats.ByApproach" />
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6">Évolution des examens blancs</MudText>
+            @if (stats.Exams.Count > 0)
+            {
+                <MudChart ChartType="ChartType.Line" ChartSeries="@examSeries" XAxisLabels="@stats.Exams.Select(e => Clock.ToLocal(e.StartUtc).ToString("dd/MM")).ToArray()"
+                          Width="100%" Height="260px" ChartOptions="percentOptions" />
+                <MudSimpleTable Dense="true">
+                    <thead><tr><th>Examen</th><th class="num">Questions</th><th class="num">Score</th>@foreach (var d in Enum.GetValues<Domain>()) { <th class="num">@Scoring.Label(d)</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var e in stats.Exams)
+                        {
+                            <tr>
+                                <td><MudLink Href="@($"session/{e.SessionId}/resultats")">@e.Title</MudLink></td>
+                                <td class="num">@e.Questions</td>
+                                <td class="num">@e.Score.ToString("0.#") %</td>
+                                @foreach (var d in Enum.GetValues<Domain>())
+                                {
+                                    var line = e.ByDomain.FirstOrDefault(l => l.Key == d.ToString());
+                                    <td class="num">@(line is null ? "—" : $"{line.Percent:0} %")</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2"><em>Aucun examen blanc terminé.</em></MudText>
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6">Heures réalisées et prévues</MudText>
+            @if (stats.Hours.Count > 0)
+            {
+                <MudChart ChartType="ChartType.Bar" ChartSeries="@hoursSeries" XAxisLabels="@stats.Hours.Select(h => $"S{h.Week}").ToArray()"
+                          Width="100%" Height="260px" />
+                <MudText Typo="Typo.caption">Réalisé = temps de lecture enregistré + temps passé sur les questions.</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2"><em>Pas encore d'activité.</em></MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6">Score par tâche ECO</MudText>
+            <ScoreTable Title="Tâche" Lines="stats.ByEcoTask" />
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudText Typo="Typo.h6">Bilan hebdomadaire (Markdown)</MudText>
+                <MudSpacer />
+                <MudNumericField T="int" Value="week" ValueChanged="LoadWeek" Label="Semaine" Min="1" Max="53" Margin="Margin.Dense" Style="width: 110px" />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="Copy">Copier</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download" OnClick="Download">Télécharger .md</MudButton>
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="d-block mb-2">À coller dans la conversation du bilan du dimanche avec Claude.</MudText>
+            <MudTabs Elevation="0" PanelClass="pt-3">
+                <MudTabPanel Text="Aperçu"><div class="markdown weekly">@Markdown.Render(weekly)</div></MudTabPanel>
+                <MudTabPanel Text="Source"><pre class="weekly-source">@weekly</pre></MudTabPanel>
+            </MudTabs>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private StatsReport? stats;
+    private List<ChartSeries> examSeries = [];
+    private List<ChartSeries> hoursSeries = [];
+    private int week;
+    private string weekly = "";
+    private readonly ChartOptions percentOptions = new() { YAxisTicks = 20, MaxNumYAxisTicks = 6, YAxisLines = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        stats = await Reports.StatsAsync();
+        examSeries = [new ChartSeries { Name = "Score %", Data = stats.Exams.Select(e => e.Score).ToArray() }];
+        hoursSeries =
+        [
+            new ChartSeries { Name = "Réalisées", Data = stats.Hours.Select(h => h.DoneHours).ToArray() },
+            new ChartSeries { Name = "Prévues", Data = stats.Hours.Select(h => h.PlannedHours).ToArray() },
+        ];
+        week = await Reports.CurrentWeekAsync();
+        weekly = await Reports.WeeklyMarkdownAsync(week);
+    }
+
+    private static List<ChartSeries> Series(string name, IReadOnlyList<ScoreLine> lines) =>
+        [new ChartSeries { Name = name, Data = lines.Select(l => l.Percent).ToArray() }];
+
+    private async Task LoadWeek(int w)
+    {
+        week = w;
+        weekly = await Reports.WeeklyMarkdownAsync(w);
+    }
+
+    private async Task Download() => await JS.InvokeVoidAsync("pmpStudy.download", $"bilan-semaine-{week}.md", "text/markdown", weekly);
+
+    private async Task Copy()
+    {
+        await JS.InvokeVoidAsync("pmpStudy.copy", weekly);
+        Snackbar.Add("Bilan copié", Severity.Success);
+    }
+}

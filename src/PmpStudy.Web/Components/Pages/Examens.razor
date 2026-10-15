@@ -1,0 +1,91 @@
+@page "/examens"
+@inject SessionService Sessions
+@inject ContentService Content
+@inject IStudyClock Clock
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Examens blancs — PMP Study</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Examens blancs</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="5">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6">Nouvel examen</MudText>
+            <MudText Typo="Typo.body2" Class="my-2">
+                Format 2026 : 180 questions en 3 sections de 60, 240 minutes, pause facultative de 10 minutes après les questions 60 et 120.
+                Pas de correction avant la fin. Tirage proportionnel à l'ECO (≈ 59 Personnes, 74 Processus, 47 Environnement d'affaires ; ≈ 40 % prédictif).
+            </MudText>
+            @if (stats is not null)
+            {
+                <MudText Typo="Typo.body2">Banque actuelle : <b>@stats.Total</b> questions actives.</MudText>
+                @if (stats.Total < 180)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="my-2">
+                        Moins de 180 questions : l'examen sera plus court (durée au prorata, 80 s par question). Il en faut au moins 500 pour trois examens sans répétition.
+                    </MudAlert>
+                }
+            }
+            <MudNumericField @bind-Value="count" Label="Nombre de questions" Min="3" Max="180" Margin="Margin.Dense" Class="mt-2" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Start" Disabled="busy" StartIcon="@Icons.Material.Filled.PlayArrow">
+                Commencer l'examen
+            </MudButton>
+            <MudText Typo="Typo.caption" Class="d-block mt-2">Pensé pour l'ordinateur, comme le vrai.</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="7">
+        <MudPaper Elevation="1" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Historique</MudText>
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead><tr><th>Examen</th><th>Date</th><th class="num">Questions</th><th class="num">Score</th><th>Niveau</th></tr></thead>
+                <tbody>
+                    @foreach (var s in exams)
+                    {
+                        <tr class="clickable" @onclick="@(() => Nav.NavigateTo(s.IsFinished ? $"session/{s.Id}/resultats" : $"examen/{s.Id}"))">
+                            <td>@s.Title</td>
+                            <td>@Clock.ToLocal(s.StartUtc).ToString("dd/MM/yyyy")</td>
+                            <td class="num">@s.Items.Count</td>
+                            <td class="num">@(s.IsFinished ? $"{s.ScorePercent:0.#} %" : "en cours")</td>
+                            <td>@if (s.IsFinished) { <LevelChip Level="Scoring.LevelFor(s.ScorePercent ?? 0)" /> }</td>
+                        </tr>
+                    }
+                    @if (exams.Count == 0)
+                    {
+                        <tr><td colspan="5"><em>Aucun examen passé.</em></td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private QuestionBankStats? stats;
+    private List<StudySession> exams = [];
+    private int count = SessionClock.ExamQuestionCount;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        stats = await Content.BankStatsAsync();
+        exams = await Sessions.ListAsync(SessionType.Exam);
+        count = Math.Min(SessionClock.ExamQuestionCount, Math.Max(3, stats.Total));
+    }
+
+    private async Task Start()
+    {
+        var minutes = count == SessionClock.ExamQuestionCount ? 240 : count * SessionClock.DefaultSecondsPerQuestion / 60;
+        if (await Dialogs.ShowMessageBox("Commencer l'examen", $"{count} questions, {minutes} minutes. Le chronomètre démarre tout de suite.",
+                yesText: "C'est parti", cancelText: "Annuler") != true) return;
+        busy = true;
+        try
+        {
+            var (id, _) = await Sessions.CreateExamAsync(count);
+            Nav.NavigateTo($"examen/{id}");
+        }
+        catch (SessionException ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        finally { busy = false; }
+    }
+}

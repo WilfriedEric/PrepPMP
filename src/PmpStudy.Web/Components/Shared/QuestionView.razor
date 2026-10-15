@@ -1,0 +1,92 @@
+@* Affiche une question ; en mode correction, colore les options et montre l'explication. *@
+
+@if (Question.Scenario is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-3 scenario">
+        <MudText Typo="Typo.subtitle2">Mise en situation</MudText>
+        <MudText Typo="Typo.body2" Style="white-space: pre-line">@Question.Scenario.Text</MudText>
+    </MudPaper>
+}
+
+<MudText Typo="Typo.body1" Class="stem mb-3" Style="white-space: pre-line">@Question.Stem</MudText>
+@if (Question.Type == QuestionType.Multiple)
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2 d-block">
+        Plusieurs réponses (@Question.CorrectCount à cocher)
+    </MudText>
+}
+
+<div class="options">
+    @foreach (var (option, index) in Question.Options.OrderBy(o => o.Order).Select((o, i) => (o, i)))
+    {
+        var selected = Selected.Contains(option.Id);
+        <div class="@OptionClass(option, selected)" @onclick="() => Toggle(option.Id)" role="button" tabindex="0" aria-pressed="@selected"
+             @onkeydown="e => OnKey(e, option.Id)">
+            <span class="option-letter">@((char)('A' + index))</span>
+            @if (Question.Type == QuestionType.Multiple)
+            {
+                <MudIcon Icon="@(selected ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)" Size="Size.Small" />
+            }
+            else
+            {
+                <MudIcon Icon="@(selected ? Icons.Material.Filled.RadioButtonChecked : Icons.Material.Filled.RadioButtonUnchecked)" Size="Size.Small" />
+            }
+            <span class="option-text">@option.Text</span>
+            @if (ShowCorrection && option.IsCorrect)
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" Class="ml-auto" />
+            }
+        </div>
+    }
+</div>
+
+@if (ShowCorrection)
+{
+    <MudAlert Severity="@(IsCorrect == true ? Severity.Success : Severity.Error)" Class="mt-3" Dense="true">
+        @(IsCorrect == true ? "Bonne réponse" : Selected.Count == 0 ? "Sans réponse" : "Réponse fausse")
+    </MudAlert>
+    @if (!string.IsNullOrWhiteSpace(Question.Explanation))
+    {
+        <MudPaper Outlined="true" Class="pa-3 mt-2 explanation">
+            <MudText Typo="Typo.subtitle2">Explication</MudText>
+            <div class="markdown">@Markdown.Render(Question.Explanation)</div>
+        </MudPaper>
+    }
+    <MudText Typo="Typo.caption" Class="mt-2 d-block">
+        @if (Question.EcoTask is not null) { <span>@Question.EcoTask.Code — @Question.EcoTask.Title · </span> }
+        @Scoring.Label(Question.Approach) · source : @Question.Source
+    </MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public Question Question { get; set; } = default!;
+    [Parameter] public IReadOnlyCollection<int> Selected { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyCollection<int>> SelectedChanged { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool ShowCorrection { get; set; }
+    [Parameter] public bool? IsCorrect { get; set; }
+
+    private string OptionClass(QuestionOption option, bool selected)
+    {
+        var css = "option";
+        if (selected) css += " selected";
+        if (ReadOnly) css += " readonly";
+        if (ShowCorrection && option.IsCorrect) css += " correct";
+        else if (ShowCorrection && selected) css += " wrong";
+        return css;
+    }
+
+    private async Task Toggle(int optionId)
+    {
+        if (ReadOnly) return;
+        IReadOnlyCollection<int> next;
+        if (Question.Type == QuestionType.Single) next = [optionId];
+        else next = Selected.Contains(optionId) ? Selected.Where(id => id != optionId).ToList() : Selected.Append(optionId).ToList();
+        await SelectedChanged.InvokeAsync(next);
+    }
+
+    private async Task OnKey(KeyboardEventArgs e, int optionId)
+    {
+        if (e.Key is "Enter" or " ") await Toggle(optionId);
+    }
+}

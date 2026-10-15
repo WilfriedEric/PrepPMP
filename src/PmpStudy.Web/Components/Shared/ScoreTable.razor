@@ -1,0 +1,26 @@
+<MudSimpleTable Dense="true" Hover="true" Class="score-table">
+    <thead>
+        <tr><th>@Title</th><th class="num">Justes</th><th class="num">Total</th><th class="num">%</th><th>Niveau</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var line in Lines)
+        {
+            <tr>
+                <td>@line.Label</td>
+                <td class="num">@line.Correct</td>
+                <td class="num">@line.Total</td>
+                <td class="num">@line.Percent.ToString("0.#")</td>
+                <td><LevelChip Level="line.Level" /></td>
+            </tr>
+        }
+        @if (Lines.Count == 0)
+        {
+            <tr><td colspan="5"><em>Pas encore de données.</em></td></tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public IReadOnlyList<ScoreLine> Lines { get; set; } = [];
+}

@@ -1,0 +1,265 @@
+@page "/admin/import"
+@using System.Globalization
+@using System.Text.Json
+@inject IPdfStore PdfStore
+@inject ContentService Content
+@inject StudyService Study
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject ILogger<AdminImport> Logger
+
+<PageTitle>Import et réglages — PMP Study</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Import et réglages</MudText>
+
+<MudGrid>
+    @* ---------- PDF ---------- *@
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4 h-100">
+            <MudText Typo="Typo.h6">1. PDF du PMBOK 8</MudText>
+            <MudText Typo="Typo.body2" Class="my-2">
+                Stocké en privé (disque du serveur ou conteneur Blob privé) et servi uniquement après connexion, jamais par un lien public.
+            </MudText>
+            @if (pdfLength is { } len)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">
+                    PDF chargé : @(settings.GetValueOrDefault(SettingKeys.PdfFileName) ?? "pmbok.pdf") — @(len / 1024 / 1024) Mo
+                    @if (settings.GetValueOrDefault(SettingKeys.PdfPageCount) is { } pc) { <span>, @pc pages</span> }
+                </MudAlert>
+            }
+            <MudFileUpload T="IBrowserFile" Accept=".pdf" FilesChanged="UploadPdf" MaximumFileCount="1">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudUpload" Disabled="busy">
+                        @(pdfLength is null ? "Charger le PDF" : "Remplacer le PDF")
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+            @if (busy) { <MudProgressLinear Indeterminate="true" Class="mt-2" /> }
+
+            <MudText Typo="Typo.subtitle1" Class="mt-4">Chapitres</MudText>
+            <MudText Typo="Typo.body2">@chapterCount chapitre(s) en base.</MudText>
+            @if (extracted.Count > 0)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2">@extracted.Count signets lus dans le PDF :</MudText>
+                <div class="extracted-list">
+                    @foreach (var c in extracted.Take(300))
+                    {
+                        <div><code>@c.Code</code> @c.Title <span class="muted">p. @c.StartPage–@c.EndPage</span></div>
+                    }
+                </div>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ApplyExtracted">Remplacer les chapitres par ces signets</MudButton>
+            }
+            <MudText Typo="Typo.body2" Class="mt-3">Ou importer une liste JSON <code>[{"code":"2.3","title":"…","startPage":45,"endPage":52,"parent":"2"}]</code> :</MudText>
+            <MudTextField @bind-Value="chaptersJson" Immediate="true" Lines="3" Variant="Variant.Outlined" Placeholder="Coller le JSON des chapitres" Class="mt-1" />
+            <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="ImportChapters" Disabled="@string.IsNullOrWhiteSpace(chaptersJson)">Importer les chapitres</MudButton>
+        </MudPaper>
+    </MudItem>
+
+    @* ---------- Plan ---------- *@
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4 h-100">
+            <MudText Typo="Typo.h6">2. Plan de révision</MudText>
+            <MudText Typo="Typo.body2" Class="my-2">
+                Une entrée par jour ; une date existante est mise à jour. @planCount jour(s) en base.
+            </MudText>
+            <MudStack Row="true" Spacing="2">
+                <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="f => ReadInto(f, v => planJson = v)">
+                    <ActivatorContent><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen">Ouvrir un fichier</MudButton></ActivatorContent>
+                </MudFileUpload>
+                <MudButton Variant="Variant.Text" OnClick="DownloadPlanSample">Modèle</MudButton>
+            </MudStack>
+            <MudTextField @bind-Value="planJson" Immediate="true" Lines="8" Variant="Variant.Outlined" Class="mt-2" Placeholder="@PlanSample" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportPlan" Disabled="@string.IsNullOrWhiteSpace(planJson)">Importer le plan</MudButton>
+        </MudPaper>
+    </MudItem>
+
+    @* ---------- Questions ---------- *@
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4 h-100">
+            <MudText Typo="Typo.h6">3. Questions</MudText>
+            <MudText Typo="Typo.body2" Class="my-2">
+                Format du brief (tableau JSON). Avec un <code>"id"</code>, une réimportation met la question à jour au lieu de la dupliquer.
+                Types : <code>single</code>, <code>multiple</code>. Codes ECO : PE-1…PE-8, PR-1…PR-10, EA-1…EA-8.
+            </MudText>
+            <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="f => ReadInto(f, v => questionsJson = v)">
+                <ActivatorContent><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen">Ouvrir un fichier</MudButton></ActivatorContent>
+            </MudFileUpload>
+            <MudTextField @bind-Value="questionsJson" Immediate="true" Lines="8" Variant="Variant.Outlined" Class="mt-2" Placeholder="@QuestionsPlaceholder" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportQuestions" Disabled="@string.IsNullOrWhiteSpace(questionsJson)">Importer les questions</MudButton>
+        </MudPaper>
+    </MudItem>
+
+    @* ---------- Réglages ---------- *@
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="1" Class="pa-4 h-100">
+            <MudText Typo="Typo.h6">4. Réglages</MudText>
+            <MudDatePicker Label="Date de l'examen" Date="examDate" DateChanged="d => examDate = d" DateFormat="dd/MM/yyyy" Class="mt-2" />
+            <MudTextField @bind-Value="simulations" Label="Dates des simulations (AAAA-MM-JJ, séparées par des virgules)" Class="mt-2" />
+            <MudNumericField @bind-Value="weeklyHours" Label="Heures de révision prévues par semaine" Min="1" Max="60" Class="mt-2" />
+            <MudNumericField @bind-Value="pageOffset" Label="Décalage de pages (page PDF = page imprimée + décalage)" Class="mt-2"
+                             HelperText="Les pages du plan sont les pages imprimées ; le lecteur ouvre la page PDF correspondante." />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveSettings">Enregistrer</MudButton>
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle1">Sauvegarde</MudText>
+            <MudStack Row="true" Wrap="Wrap.Wrap" Class="mt-2">
+                <MudButton Variant="Variant.Outlined" Href="api/export" Target="_blank" StartIcon="@Icons.Material.Filled.Download">Export complet (JSON)</MudButton>
+                <MudButton Variant="Variant.Outlined" Href="api/questions/export" Target="_blank">Banque de questions (JSON)</MudButton>
+                <MudButton Variant="Variant.Outlined" Href="api/notes/export.md" Target="_blank">Notes (Markdown)</MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    @if (lastResult is not null)
+    {
+        <MudItem xs="12">
+            <MudAlert Severity="@(lastResult.Ok ? Severity.Success : Severity.Warning)" ShowCloseIcon="true" CloseIconClicked="() => lastResult = null">
+                <b>@lastTitle</b> : @lastResult.Created créé(s), @lastResult.Updated mis à jour, @lastResult.Skipped ignoré(s).
+                @if (lastResult.Errors.Count > 0)
+                {
+                    <ul class="mt-1">@foreach (var e in lastResult.Errors.Take(50)) { <li>@e</li> }</ul>
+                }
+            </MudAlert>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private const long MaxPdfBytes = 200L * 1024 * 1024;
+    private Dictionary<string, string> settings = [];
+    private long? pdfLength;
+    private int chapterCount, planCount;
+    private List<ChapterImport> extracted = [];
+    private string? chaptersJson, planJson, questionsJson;
+    private DateTime? examDate;
+    private string? simulations;
+    private double weeklyHours = StudyService.DefaultWeeklyHours;
+    private int pageOffset;
+    private bool busy;
+    private ImportResult? lastResult;
+    private string lastTitle = "";
+
+    private const string QuestionsPlaceholder = "[ { \"type\": \"single\", \"ecoTask\": \"PE-2\", … } ]";
+
+    private const string PlanSample = """
+        [
+          { "date": "2026-11-02", "week": 1, "pageFrom": 1, "pageTo": 18, "questionGoal": 30,
+            "label": "Introduction et principes", "chapters": ["1"], "ecoTasks": ["PE-1", "PR-1"] }
+        ]
+        """;
+
+    protected override async Task OnInitializedAsync() => await Refresh();
+
+    private async Task Refresh()
+    {
+        settings = await Study.AllSettingsAsync();
+        pdfLength = await PdfStore.GetLengthAsync();
+        chapterCount = (await Content.ChaptersAsync()).Count;
+        planCount = (await Content.PlanAsync()).Count;
+        examDate = (await Study.ExamDateAsync()).ToDateTime(TimeOnly.MinValue);
+        simulations = string.Join(", ", (await Study.SimulationDatesAsync()).Select(d => d.ToString("yyyy-MM-dd")));
+        weeklyHours = double.TryParse(settings.GetValueOrDefault(SettingKeys.WeeklyHoursTarget), NumberStyles.Float, CultureInfo.InvariantCulture, out var w) ? w : StudyService.DefaultWeeklyHours;
+        pageOffset = await Study.PageOffsetAsync();
+    }
+
+    private async Task UploadPdf(IBrowserFile? file)
+    {
+        if (file is null) return;
+        busy = true;
+        StateHasChanged();
+        var temp = Path.GetTempFileName();
+        try
+        {
+            await using (var target = File.Create(temp))
+            await using (var source = file.OpenReadStream(MaxPdfBytes))
+                await source.CopyToAsync(target);
+
+            var pages = ContentService.CountPages(temp); // vérifie aussi que c'est bien un PDF lisible
+            await using (var stored = File.OpenRead(temp))
+                await PdfStore.SaveAsync(stored);
+            await Study.SetSettingAsync(SettingKeys.PdfFileName, file.Name);
+            await Study.SetSettingAsync(SettingKeys.PdfPageCount, pages.ToString(CultureInfo.InvariantCulture));
+            await Study.SetSettingAsync(SettingKeys.PdfUploadedUtc, DateTime.UtcNow.ToString("O"));
+            extracted = ContentService.ExtractChapters(temp);
+            Snackbar.Add($"PDF chargé ({pages} pages). {(extracted.Count > 0 ? $"{extracted.Count} signets trouvés." : "Aucun signet : importe les chapitres en JSON.")}", Severity.Success);
+            await Refresh();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Échec du chargement du PDF");
+            Snackbar.Add($"Échec : {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            File.Delete(temp);
+            busy = false;
+        }
+    }
+
+    private async Task ApplyExtracted()
+    {
+        Show("Chapitres", await Content.ImportChaptersAsync(extracted, replace: true));
+        extracted = [];
+        await Refresh();
+    }
+
+    private async Task ImportChapters()
+    {
+        try
+        {
+            var items = JsonSerializer.Deserialize<List<ChapterImport>>(chaptersJson!, ContentService.Json) ?? [];
+            Show("Chapitres", await Content.ImportChaptersAsync(items, replace: false));
+            chaptersJson = null;
+            await Refresh();
+        }
+        catch (JsonException ex) { Snackbar.Add($"JSON invalide : {ex.Message}", Severity.Error); }
+    }
+
+    private async Task ImportPlan()
+    {
+        try
+        {
+            var days = JsonSerializer.Deserialize<List<PlanDayImport>>(planJson!, ContentService.Json) ?? [];
+            Show("Plan", await Content.ImportPlanAsync(days));
+            planJson = null;
+            await Refresh();
+        }
+        catch (JsonException ex) { Snackbar.Add($"JSON invalide : {ex.Message}", Severity.Error); }
+    }
+
+    private async Task ImportQuestions()
+    {
+        try
+        {
+            Show("Questions", await Content.ImportQuestionsAsync(ContentService.ParseQuestions(questionsJson!)));
+            questionsJson = null;
+        }
+        catch (JsonException ex) { Snackbar.Add($"JSON invalide : {ex.Message}", Severity.Error); }
+    }
+
+    private async Task ReadInto(IBrowserFile? file, Action<string> set)
+    {
+        if (file is null) return;
+        using var reader = new StreamReader(file.OpenReadStream(10 * 1024 * 1024));
+        set(await reader.ReadToEndAsync());
+    }
+
+    private async Task DownloadPlanSample() =>
+        await JS.InvokeVoidAsync("pmpStudy.download", "plan-modele.json", "application/json", PlanSample);
+
+    private async Task SaveSettings()
+    {
+        if (examDate is { } d) await Study.SetSettingAsync(SettingKeys.ExamDate, DateOnly.FromDateTime(d).ToString("yyyy-MM-dd"));
+        await Study.SetSettingAsync(SettingKeys.SimulationDates, simulations ?? "");
+        await Study.SetSettingAsync(SettingKeys.WeeklyHoursTarget, weeklyHours.ToString(CultureInfo.InvariantCulture));
+        await Study.SetSettingAsync(SettingKeys.PageOffset, pageOffset.ToString(CultureInfo.InvariantCulture));
+        Snackbar.Add("Réglages enregistrés", Severity.Success);
+        await Refresh();
+    }
+
+    private void Show(string title, ImportResult result)
+    {
+        lastTitle = title;
+        lastResult = result;
+    }
+}

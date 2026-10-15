@@ -1,0 +1,22 @@
+[
+  {
+    "date": "2026-11-02",
+    "week": 1,
+    "pageFrom": 1,
+    "pageTo": 18,
+    "questionGoal": 30,
+    "label": "Introduction et principes",
+    "chapters": [],
+    "ecoTasks": ["PE-1", "PR-1"]
+  },
+  {
+    "date": "2026-11-03",
+    "week": 1,
+    "pageFrom": 19,
+    "pageTo": 36,
+    "questionGoal": 30,
+    "label": "Gouvernance et parties prenantes",
+    "chapters": [],
+    "ecoTasks": ["EA-1", "PE-4"]
+  }
+]

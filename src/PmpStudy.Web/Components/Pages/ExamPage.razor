@@ -1,0 +1,273 @@
+@page "/examen/{Id:int}"
+@implements IAsyncDisposable
+@inject SessionService Sessions
+@inject IStudyClock Clock
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+
+<PageTitle>@(session?.Title ?? "Examen blanc")</PageTitle>
+
+@if (session is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+    <MudText Typo="Typo.h5">@session.Title</MudText>
+    @if (current is not null)
+    {
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Section @current.Index / @session.Sections.Count</MudChip>
+    }
+    <MudSpacer />
+    <Countdown @key="stateVersion" Remaining="() => SessionClock.Remaining(session, Clock.UtcNow)" OnExpired="Expired" WarnBelow="TimeSpan.FromMinutes(15)" />
+</MudStack>
+
+@if (onBreak is not null)
+{
+    <MudPaper Elevation="1" Class="pa-6 text-center">
+        <MudText Typo="Typo.h5" Class="mb-2">Pause</MudText>
+        <MudText Class="mb-4">Le chronomètre de l'examen est arrêté pendant 10 minutes ; au-delà, le dépassement est déduit du temps restant.</MudText>
+        <Countdown @key="@($"break-{stateVersion}")" Remaining="() => SessionClock.BreakRemaining(onBreak, Clock.UtcNow)" WarnBelow="TimeSpan.FromMinutes(2)" />
+        <div class="mt-6">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="NextSection" Disabled="busy">Reprendre l'examen (section @(onBreak.Index + 1))</MudButton>
+        </div>
+    </MudPaper>
+}
+else if (current is null || current.StartUtc is null)
+{
+    var done = session.Sections.Where(s => s.EndUtc is not null).OrderBy(s => s.Index).LastOrDefault();
+    <MudPaper Elevation="1" Class="pa-6 text-center">
+        <MudText Typo="Typo.h5" Class="mb-2">Section @done?.Index validée</MudText>
+        <MudText Class="mb-4">Elle est maintenant verrouillée. Tu peux prendre une pause facultative de 10 minutes avant la section suivante.</MudText>
+        <MudStack Row="true" Justify="Justify.Center">
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="() => StartBreak(done!.Index)" Disabled="@(busy || done?.BreakStartUtc is not null)"
+                       StartIcon="@Icons.Material.Filled.Coffee">Prendre la pause</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="NextSection" Disabled="busy">Continuer sans pause</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+else if (reviewing)
+{
+    <MudPaper Elevation="1" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Revue de la section @current.Index</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            @sectionItems.Count(i => i.AnswerJson is { Length: > 2 }) répondues · @sectionItems.Count(i => i.AnswerJson is not { Length: > 2 }) sans réponse ·
+            @sectionItems.Count(i => i.Flagged) marquées à revoir
+        </MudText>
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th>#</th><th>Question</th><th>Réponse</th><th>Marques</th></tr></thead>
+            <tbody>
+                @foreach (var (it, i) in sectionItems.Select((it, i) => (it, i)))
+                {
+                    <tr class="clickable" @onclick="() => { reviewing = false; LoadItem(i); }">
+                        <td>@it.Order</td>
+                        <td>@Shorten(it.Question?.Stem)</td>
+                        <td>@(it.AnswerJson is { Length: > 2 } ? "✓" : "—")</td>
+                        <td>@(it.Flagged ? "🚩 " : "")@(it.Doubt ? "doute" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        <MudStack Row="true" Class="mt-4">
+            <MudButton OnClick="() => reviewing = false">Retour aux questions</MudButton>
+            <MudButton OnClick="ReviewFlagged" Disabled="@(!sectionItems.Any(i => i.Flagged))">Revoir les questions marquées</MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmSubmitSection" Disabled="busy">Valider la section @current.Index</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="9">
+            <MudPaper Elevation="1" Class="pa-4 question-card">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.overline">Question @item.Order / @session.Items.Count</MudText>
+                    <MudSpacer />
+                    <MudToggleIconButton Toggled="item.Flagged" ToggledChanged="v => Mark(v, item.Doubt)" Icon="@Icons.Material.Outlined.Flag"
+                                         ToggledIcon="@Icons.Material.Filled.Flag" ToggledColor="Color.Warning" title="Marquer pour revue" />
+                    <MudChip T="string" Size="Size.Small" Color="@(item.Doubt ? Color.Secondary : Color.Default)" Variant="@(item.Doubt ? Variant.Filled : Variant.Outlined)"
+                             OnClick="() => Mark(item.Flagged, !item.Doubt)">Doute</MudChip>
+                </MudStack>
+                <QuestionView Question="item.Question!" Selected="selected" SelectedChanged="OnSelected" />
+                <MudStack Row="true" Class="mt-4" Wrap="Wrap.Wrap">
+                    <MudButton StartIcon="@Icons.Material.Filled.ChevronLeft" OnClick="() => Show(index - 1)" Disabled="@(index == 0)">Précédente</MudButton>
+                    <MudSpacer />
+                    @if (index < sectionItems.Count - 1)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ChevronRight" OnClick="() => Show(index + 1)">Suivante</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenReview">Revue de la section</MudButton>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudPaper Elevation="1" Class="pa-3">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Section @current.Index</MudText>
+                <QuestionNavigator Items="sectionItems" Current="index" OnSelect="Show" />
+                <MudButton Class="mt-3" FullWidth="true" Variant="Variant.Outlined" OnClick="OpenReview">Écran de revue</MudButton>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private StudySession? session;
+    private SessionSection? current;
+    private SessionSection? onBreak;
+    private List<SessionItem> sectionItems = [];
+    private int index;
+    private SessionItem item => sectionItems[index];
+    private IReadOnlyCollection<int> selected = [];
+    private DateTime shownAt = DateTime.UtcNow;
+    private bool reviewing;
+    private bool busy;
+    private int stateVersion;
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await JS.InvokeVoidAsync("pmpStudy.guardUnload", true);
+    }
+
+    private async Task Reload()
+    {
+        session = await Sessions.GetAsync(Id);
+        if (session is null) { Nav.NavigateTo("examens"); return; }
+        if (session.Type != SessionType.Exam) { Nav.NavigateTo($"session/{Id}", replace: true); return; }
+        if (session.IsFinished) { await LeaveTo($"session/{Id}/resultats"); return; }
+        onBreak = SessionClock.ActiveBreak(session);
+        current = SessionClock.CurrentSection(session);
+        sectionItems = current is null ? [] : session.Items.Where(i => i.SectionIndex == current.Index).OrderBy(i => i.Order).ToList();
+        reviewing = false;
+        stateVersion++;
+        if (sectionItems.Count > 0)
+        {
+            var firstOpen = sectionItems.FindIndex(i => i.AnswerJson is not { Length: > 2 });
+            LoadItem(firstOpen < 0 ? 0 : firstOpen);
+        }
+    }
+
+    private void LoadItem(int i)
+    {
+        index = Math.Clamp(i, 0, sectionItems.Count - 1);
+        selected = Scoring.ParseAnswer(item.AnswerJson).ToList();
+        shownAt = DateTime.UtcNow;
+    }
+
+    private int TakeElapsed()
+    {
+        var elapsed = (int)(DateTime.UtcNow - shownAt).TotalSeconds;
+        shownAt = DateTime.UtcNow;
+        return elapsed;
+    }
+
+    private async Task Show(int i)
+    {
+        if (i < 0 || i >= sectionItems.Count || i == index) return;
+        await Sessions.AddTimeAsync(Id, item.Id, TakeElapsed());
+        LoadItem(i);
+    }
+
+    private async Task OnSelected(IReadOnlyCollection<int> value)
+    {
+        selected = value;
+        var result = await Sessions.AnswerAsync(Id, item.Id, selected, TakeElapsed());
+        if (result.SessionFinished) { await LeaveTo($"session/{Id}/resultats"); return; }
+        if (!result.Accepted) { Snackbar.Add(result.Error ?? "Réponse refusée", Severity.Warning); await Reload(); return; }
+        item.AnswerJson = Scoring.SerializeAnswer(selected);
+    }
+
+    private async Task Mark(bool flagged, bool doubt)
+    {
+        var error = await Sessions.SetMarksAsync(Id, item.Id, flagged, doubt);
+        if (error is not null) { Snackbar.Add(error, Severity.Warning); return; }
+        item.Flagged = flagged;
+        item.Doubt = doubt;
+    }
+
+    private async Task OpenReview()
+    {
+        await Sessions.AddTimeAsync(Id, item.Id, TakeElapsed());
+        reviewing = true;
+    }
+
+    private void ReviewFlagged()
+    {
+        var first = sectionItems.FindIndex(i => i.Flagged);
+        reviewing = false;
+        LoadItem(first);
+    }
+
+    private async Task ConfirmSubmitSection()
+    {
+        var unanswered = sectionItems.Count(i => i.AnswerJson is not { Length: > 2 });
+        var last = current!.Index == session!.Sections.Count;
+        var message = (unanswered > 0 ? $"{unanswered} question(s) sans réponse. " : "")
+                      + (last ? "Valider la dernière section termine l'examen." : "Une section validée est verrouillée : tu ne pourras plus y revenir.");
+        if (await Dialogs.ShowMessageBox($"Valider la section {current.Index}", message, yesText: "Valider", cancelText: "Annuler") != true) return;
+        busy = true;
+        try
+        {
+            var error = await Sessions.SubmitSectionAsync(Id, current.Index);
+            if (error is not null) Snackbar.Add(error, Severity.Warning);
+            await Reload();
+        }
+        finally { busy = false; }
+    }
+
+    private async Task StartBreak(int afterSection)
+    {
+        busy = true;
+        try
+        {
+            var error = await Sessions.StartBreakAsync(Id, afterSection);
+            if (error is not null) Snackbar.Add(error, Severity.Warning);
+            await Reload();
+        }
+        finally { busy = false; }
+    }
+
+    private async Task NextSection()
+    {
+        busy = true;
+        try
+        {
+            var error = await Sessions.StartNextSectionAsync(Id);
+            if (error is not null) Snackbar.Add(error, Severity.Warning);
+            await Reload();
+        }
+        finally { busy = false; }
+    }
+
+    private async Task Expired()
+    {
+        Snackbar.Add("Temps écoulé : l'examen est clôturé.", Severity.Info);
+        await Sessions.FinishAsync(Id);
+        await LeaveTo($"session/{Id}/resultats");
+    }
+
+    private async Task LeaveTo(string url)
+    {
+        try { await JS.InvokeVoidAsync("pmpStudy.guardUnload", false); } catch (InvalidOperationException) { }
+        Nav.NavigateTo(url);
+    }
+
+    private static string Shorten(string? s) => s is null ? "" : s.Length > 110 ? s[..107] + "…" : s;
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("pmpStudy.guardUnload", false); }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+    }
+}

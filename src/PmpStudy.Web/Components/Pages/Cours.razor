@@ -1,0 +1,271 @@
+@page "/cours"
+@page "/cours/{Page:int}"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject IPdfStore PdfStore
+@inject StudyService Study
+@inject ContentService Content
+@inject NoteService Notes
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Cours — p. @current</PageTitle>
+
+@if (hasPdf == false)
+{
+    <MudAlert Severity="Severity.Info">
+        Aucun PDF du PMBOK n'est chargé. Charge-le dans <MudLink Href="admin/import">Import et réglages</MudLink> :
+        il reste privé et n'est servi qu'après connexion.
+    </MudAlert>
+    return;
+}
+
+<MudGrid Spacing="2">
+    <MudItem xs="12" lg="8">
+        <MudPaper Elevation="1" Class="pa-2 reader-toolbar">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="1">
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="() => GoTo(current - 1)" Disabled="@(current <= 1)" aria-label="Page précédente" />
+                <MudNumericField T="int" Value="current" ValueChanged="GoTo" Min="1" Max="@Math.Max(1, pageCount)" Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" HideSpinButtons="true" Style="width: 80px" Immediate="false" />
+                <MudText Typo="Typo.body2">/ @pageCount</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="() => GoTo(current + 1)" Disabled="@(current >= pageCount)" aria-label="Page suivante" />
+                <MudIconButton Icon="@Icons.Material.Filled.ZoomOut" OnClick="() => Zoom(0.8)" aria-label="Zoom arrière" />
+                <MudIconButton Icon="@Icons.Material.Filled.FitScreen" OnClick="() => Zoom(0)" aria-label="Pleine largeur" />
+                <MudIconButton Icon="@Icons.Material.Filled.ZoomIn" OnClick="() => Zoom(1.25)" aria-label="Zoom avant" />
+                <MudSpacer />
+                @if (chapters.Count > 0)
+                {
+                    <MudSelect T="int?" Value="chapter?.Id" ValueChanged="GoToChapter" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                               Placeholder="Chapitre" Style="min-width: 220px; max-width: 360px" ToStringFunc="ChapterLabel">
+                        @foreach (var c in chapters)
+                        {
+                            <MudSelectItem T="int?" Value="c.Id">@(new string(' ', Depth(c) * 2))@c.Code @c.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudStack>
+            @if (chapter is not null || offset != 0)
+            {
+                <MudText Typo="Typo.caption" Class="ml-2">
+                    @if (chapter is not null) { <span>@chapter.Code — @chapter.Title</span> }
+                    @if (offset != 0) { <span> · page imprimée @(current - offset)</span> }
+                </MudText>
+            }
+        </MudPaper>
+        <div class="pdf-container" @ref="container">
+            <MudProgressCircular Indeterminate="true" Class="ma-8" />
+        </div>
+    </MudItem>
+
+    <MudItem xs="12" lg="4">
+        <MudPaper Elevation="1" Class="pa-3 notes-panel">
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Notes</MudText>
+                <MudSpacer />
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewNote">Note p. @current</MudButton>
+            </MudStack>
+
+            @if (editing is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-3 my-3">
+                    <MudText Typo="Typo.subtitle2">@(editing.Id == 0 ? "Nouvelle note" : "Modifier la note") — p. @editing.Page</MudText>
+                    <MudTextField @bind-Value="editing.Content" Lines="6" AutoGrow="true" MaxLines="18" Variant="Variant.Outlined"
+                                  Placeholder="Markdown : **gras**, listes, tableaux…" Class="mt-2" Immediate="true" />
+                    <MudTextField @bind-Value="editing.Tags" Label="Étiquettes (séparées par des virgules)" Margin="Margin.Dense" Class="mt-2" />
+                    <MudSelect T="int?" @bind-Value="editing.EcoTaskId" Label="Tâche ECO" Clearable="true" Margin="Margin.Dense" Class="mt-2">
+                        @foreach (var t in ecoTasks)
+                        {
+                            <MudSelectItem T="int?" Value="t.Id">@t.Code — @t.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudStack Row="true" Class="mt-3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveNote" Disabled="@string.IsNullOrWhiteSpace(editing.Content)">Enregistrer</MudButton>
+                        <MudButton OnClick="() => editing = null">Annuler</MudButton>
+                    </MudStack>
+                </MudPaper>
+            }
+
+            @if (pageNotes.Count == 0 && editing is null)
+            {
+                <MudText Typo="Typo.body2" Class="mt-3"><em>Aucune note sur cette page ni sur ce chapitre.</em></MudText>
+            }
+            @foreach (var note in pageNotes)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mt-3 note-card">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudChip T="string" Size="Size.Small" Color="@(note.Page == current ? Color.Primary : Color.Default)"
+                                 OnClick="@(() => note.Page is { } p ? GoTo(p) : Task.CompletedTask)">p. @note.Page</MudChip>
+                        @if (note.EcoTask is not null) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@note.EcoTask.Code</MudChip> }
+                        <MudSpacer />
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" OnClick="() => Edit(note)" aria-label="Modifier" />
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => DeleteNote(note)" aria-label="Supprimer" />
+                    </MudStack>
+                    <div class="markdown">@Markdown.Render(note.Content)</div>
+                    @if (!string.IsNullOrWhiteSpace(note.Tags))
+                    {
+                        <MudText Typo="Typo.caption">@note.Tags</MudText>
+                    }
+                </MudPaper>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter] public int? Page { get; set; }
+
+    private ElementReference container;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<Cours>? self;
+    private bool? hasPdf;
+    private bool opened;
+    private int current = 1;
+    private int pageCount;
+    private int offset;
+    private List<Chapter> chapters = [];
+    private List<EcoTask> ecoTasks = [];
+    private Chapter? chapter;
+    private List<Note> pageNotes = [];
+    private Note? editing;
+
+    // Suivi du temps de lecture : une séance par ouverture du lecteur.
+    private int? readingLogId;
+    private int minPage = int.MaxValue, maxPage;
+    private double activeMinutes;
+    private DateTime lastActivity = DateTime.UtcNow;
+    private DateTime lastSave = DateTime.UtcNow;
+    private static readonly TimeSpan IdleCap = TimeSpan.FromMinutes(5);
+
+    protected override async Task OnInitializedAsync()
+    {
+        hasPdf = await PdfStore.ExistsAsync();
+        if (hasPdf != true) return;
+        chapters = await Content.ChaptersAsync();
+        ecoTasks = await Content.EcoTasksAsync();
+        offset = await Study.PageOffsetAsync();
+        current = Page ?? (int.TryParse(await Study.GetSettingAsync(SettingKeys.LastPage), out var last) ? last : 1);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (opened && Page is { } p && p != current) await GoTo(p);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || hasPdf != true) return;
+        try
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pdfviewer.js");
+            self = DotNetObjectReference.Create(this);
+            pageCount = await module.InvokeAsync<int>("open", container, "/api/course/pdf", current, self);
+            opened = true;
+            StateHasChanged();
+        }
+        catch (JSException ex)
+        {
+            Snackbar.Add($"Impossible d'ouvrir le PDF : {ex.Message}", Severity.Error);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnPageRendered(int page)
+    {
+        RecordActivity();
+        current = page;
+        minPage = Math.Min(minPage, page);
+        maxPage = Math.Max(maxPage, page);
+        chapter = chapters.Count == 0 ? null : await Content.ChapterForPageAsync(page);
+        await LoadNotes();
+        await Study.SetLastPageAsync(page);
+        if (Page != page) Nav.NavigateTo($"cours/{page}", replace: true);
+        if (DateTime.UtcNow - lastSave > TimeSpan.FromMinutes(1)) await SaveReading();
+        StateHasChanged();
+    }
+
+    private void RecordActivity()
+    {
+        var now = DateTime.UtcNow;
+        var gap = now - lastActivity;
+        activeMinutes += (gap < IdleCap ? gap : IdleCap).TotalMinutes;
+        lastActivity = now;
+    }
+
+    private async Task SaveReading()
+    {
+        if (maxPage == 0) return;
+        lastSave = DateTime.UtcNow;
+        readingLogId = await Study.TrackReadingAsync(readingLogId, minPage, maxPage, activeMinutes);
+    }
+
+    private async Task GoTo(int page)
+    {
+        if (module is null) return;
+        await module.InvokeVoidAsync("goTo", container, page);
+    }
+
+    private async Task GoToChapter(int? id)
+    {
+        if (chapters.FirstOrDefault(c => c.Id == id) is { } c) await GoTo(c.StartPage);
+    }
+
+    private async Task Zoom(double factor)
+    {
+        if (module is not null) await module.InvokeVoidAsync("zoom", container, factor);
+    }
+
+    private string ChapterLabel(int? id) => chapters.FirstOrDefault(c => c.Id == id) is { } c ? $"{c.Code} {c.Title}" : "";
+
+    private int Depth(Chapter c)
+    {
+        var depth = 0;
+        var parentId = c.ParentId;
+        while (parentId is not null && depth < 5)
+        {
+            depth++;
+            parentId = chapters.FirstOrDefault(x => x.Id == parentId)?.ParentId;
+        }
+        return depth;
+    }
+
+    private async Task LoadNotes() => pageNotes = await Notes.ForPageAsync(current, chapter?.Id);
+
+    private void NewNote() => editing = new Note { Page = current, ChapterId = chapter?.Id };
+
+    private void Edit(Note note) => editing = new Note
+    {
+        Id = note.Id, Page = note.Page, Content = note.Content, Tags = note.Tags, ChapterId = note.ChapterId, EcoTaskId = note.EcoTaskId,
+    };
+
+    private async Task SaveNote()
+    {
+        if (editing is null) return;
+        await Notes.SaveAsync(editing);
+        editing = null;
+        await LoadNotes();
+        Snackbar.Add("Note enregistrée", Severity.Success);
+    }
+
+    private async Task DeleteNote(Note note)
+    {
+        await Notes.DeleteAsync(note.Id);
+        await LoadNotes();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            RecordActivity();
+            await SaveReading();
+            if (module is not null)
+            {
+                await module.InvokeVoidAsync("dispose", container);
+                await module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+        self?.Dispose();
+    }
+}

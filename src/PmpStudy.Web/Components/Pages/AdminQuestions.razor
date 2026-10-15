@@ -1,0 +1,79 @@
+@page "/admin/questions"
+@inject ContentService Content
+
+<PageTitle>Banque de questions — PMP Study</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Banque de questions</MudText>
+
+@if (stats is not null)
+{
+    <MudPaper Elevation="1" Class="pa-4 mb-4">
+        <MudText><b>@stats.Total</b> questions actives</MudText>
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
+            @foreach (var (k, v) in stats.ByDomain) { <MudChip T="string" Size="Size.Small">@DomainLabel(k) : @v</MudChip> }
+            @foreach (var (k, v) in stats.ByApproach) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@(Enum.TryParse<Approach>(k, out var a) ? Scoring.Label(a) : k) : @v</MudChip> }
+        </MudStack>
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-1">
+            @foreach (var (k, v) in stats.BySource) { <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">@k : @v</MudChip> }
+        </MudStack>
+    </MudPaper>
+}
+
+<MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+    <MudTextField T="string" Value="text" ValueChanged="v => { text = v; return Load(); }" Placeholder="Rechercher dans l'énoncé ou l'explication" Immediate="true" DebounceInterval="300"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Style="min-width: 300px" />
+    <MudSelect T="string" Value="source" ValueChanged="v => { source = v; return Load(); }" Label="Source" Clearable="true" Margin="Margin.Dense" Style="min-width: 220px">
+        @foreach (var s in sources) { <MudSelectItem T="string" Value="s">@s</MudSelectItem> }
+    </MudSelect>
+</MudStack>
+
+<MudExpansionPanels Elevation="1">
+    @foreach (var q in questions)
+    {
+        <MudExpansionPanel>
+            <TitleContent>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudText Typo="Typo.caption" Style="min-width: 90px">@(q.ExternalId ?? $"#{q.Id}")</MudText>
+                    @if (q.EcoTask is not null) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@q.EcoTask.Code</MudChip> }
+                    <MudText Typo="Typo.body2" Style="@(q.IsActive ? "" : "text-decoration: line-through; opacity: .6")">@Shorten(q.Stem)</MudText>
+                </MudStack>
+            </TitleContent>
+            <ChildContent>
+                <QuestionView Question="q" ReadOnly="true" ShowCorrection="true" IsCorrect="true" />
+                <MudSwitch T="bool" Value="q.IsActive" ValueChanged="v => Toggle(q, v)" Color="Color.Primary" Class="mt-2">
+                    @(q.IsActive ? "Active (utilisée dans les sessions)" : "Désactivée")
+                </MudSwitch>
+            </ChildContent>
+        </MudExpansionPanel>
+    }
+</MudExpansionPanels>
+@if (questions.Count == 100)
+{
+    <MudText Typo="Typo.caption">Affichage limité aux 100 premières : affine la recherche.</MudText>
+}
+
+@code {
+    private QuestionBankStats? stats;
+    private List<Question> questions = [];
+    private List<string> sources = [];
+    private string? text, source;
+
+    protected override async Task OnInitializedAsync()
+    {
+        stats = await Content.BankStatsAsync();
+        sources = await Content.SourcesAsync();
+        await Load();
+    }
+
+    private async Task Load() => questions = await Content.SearchQuestionsAsync(text, source);
+
+    private async Task Toggle(Question q, bool active)
+    {
+        await Content.SetQuestionActiveAsync(q.Id, active);
+        q.IsActive = active;
+        stats = await Content.BankStatsAsync();
+    }
+
+    private static string DomainLabel(string key) => Enum.TryParse<Domain>(key, out var d) ? Scoring.Label(d) : "Sans tâche ECO";
+    private static string Shorten(string s) => s.Length > 120 ? s[..117] + "…" : s;
+}

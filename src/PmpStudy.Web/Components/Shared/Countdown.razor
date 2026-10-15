@@ -1,0 +1,60 @@
+@implements IAsyncDisposable
+
+<MudChip T="string" Color="@ChipColor" Icon="@Icons.Material.Filled.Timer" Class="countdown" Variant="Variant.Filled">
+    @Format(remaining)
+</MudChip>
+
+@code {
+    /// <summary>Temps restant, recalculé à chaque tick depuis l'échéance fixée par le serveur.</summary>
+    [Parameter, EditorRequired] public Func<TimeSpan> Remaining { get; set; } = default!;
+    [Parameter] public EventCallback OnExpired { get; set; }
+    [Parameter] public TimeSpan WarnBelow { get; set; } = TimeSpan.FromMinutes(5);
+
+    private TimeSpan remaining;
+    private PeriodicTimer? timer;
+    private Task? loop;
+    private bool expiredRaised;
+    private readonly CancellationTokenSource cts = new();
+
+    private Color ChipColor => remaining <= TimeSpan.Zero ? Color.Error : remaining < WarnBelow ? Color.Warning : Color.Primary;
+
+    protected override void OnInitialized()
+    {
+        remaining = Remaining();
+        timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        loop = RunAsync();
+    }
+
+    private async Task RunAsync()
+    {
+        try
+        {
+            while (await timer!.WaitForNextTickAsync(cts.Token))
+            {
+                remaining = Remaining();
+                await InvokeAsync(StateHasChanged);
+                if (remaining <= TimeSpan.Zero && !expiredRaised)
+                {
+                    expiredRaised = true;
+                    await InvokeAsync(() => OnExpired.InvokeAsync());
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    public static string Format(TimeSpan t)
+    {
+        if (t < TimeSpan.Zero) return "-" + Format(-t);
+        return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:D2}:{t.Seconds:D2}" : $"{t.Minutes:D2}:{t.Seconds:D2}";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        cts.Cancel();
+        timer?.Dispose();
+        if (loop is not null) { try { await loop; } catch { } }
+        cts.Dispose();
+    }
+}

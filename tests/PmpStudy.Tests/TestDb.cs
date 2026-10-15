@@ -49,6 +49,21 @@ public sealed class TestDb : IDbContextFactory<AppDbContext>, IAsyncDisposable
     public StudyService Study => new(this, Clock);
     public NoteService Notes => new(this, Clock);
     public ReportService Reports => new(this, Clock, Study);
+    public FakePushSender Push { get; } = new();
+    public NotificationService Notifications => new(this, Clock, Push, Study, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
 
     public async ValueTask DisposeAsync() => await connection.DisposeAsync();
+}
+
+public class FakePushSender : IPushSender
+{
+    public List<(string Endpoint, string Payload)> Sent { get; } = [];
+    public HashSet<string> GoneEndpoints { get; } = [];
+
+    public Task<PushResult> SendAsync(PmpStudy.Core.Entities.PushDevice device, string payloadJson, VapidKeys keys, CancellationToken ct)
+    {
+        if (GoneEndpoints.Contains(device.Endpoint)) return Task.FromResult(PushResult.Gone);
+        Sent.Add((device.Endpoint, payloadJson));
+        return Task.FromResult(PushResult.Sent);
+    }
 }

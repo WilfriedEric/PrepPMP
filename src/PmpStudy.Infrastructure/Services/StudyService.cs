@@ -17,6 +17,12 @@ public static class SettingKeys
     public const string PdfFileName = "PdfFileName";
     public const string PdfUploadedUtc = "PdfUploadedUtc";
     public const string PdfPageCount = "PdfPageCount";
+    public const string ReminderEnabled = "ReminderEnabled";
+    /// <summary>Heure locale du rappel quotidien, « HH:mm ».</summary>
+    public const string ReminderTime = "ReminderTime";
+    public const string ReminderLastSent = "ReminderLastSent";
+    public const string VapidPublicKey = "VapidPublicKey";
+    public const string VapidPrivateKey = "VapidPrivateKey";
 }
 
 public record PageRange(int From, int To);

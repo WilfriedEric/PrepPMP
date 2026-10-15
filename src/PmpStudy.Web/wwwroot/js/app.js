@@ -20,3 +20,52 @@ window.pmpStudy = {
         window.onbeforeunload = on ? () => true : null;
     }
 };
+
+// ---------- PWA : service worker et notifications ----------
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(console.warn));
+}
+
+window.pmpPush = {
+    // « unsupported », « default », « granted » ou « denied ».
+    state: function () {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return 'unsupported';
+        return Notification.permission;
+    },
+    isStandalone: function () {
+        return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    },
+    // Abonnement courant de cet appareil, ou null.
+    current: async function () {
+        if (this.state() === 'unsupported') return null;
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        return sub ? sub.toJSON() : null;
+    },
+    subscribe: async function (publicKey) {
+        if (this.state() === 'unsupported') throw new Error('Notifications non prises en charge par ce navigateur.');
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') throw new Error('Autorisation refusée : réactive-la dans les réglages du navigateur.');
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+            sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(publicKey) });
+        }
+        return sub.toJSON();
+    },
+    unsubscribe: async function () {
+        if (this.state() === 'unsupported') return null;
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub) return null;
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        return endpoint;
+    }
+};
+
+function base64UrlToBytes(value) {
+    const padding = '='.repeat((4 - value.length % 4) % 4);
+    const raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}

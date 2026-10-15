@@ -354,6 +354,45 @@ namespace PmpStudy.Infrastructure.Migrations.Sqlite
                     b.ToTable("Notes");
                 });
 
+            modelBuilder.Entity("PmpStudy.Core.Entities.PushDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(800)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastSuccessUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.ToTable("PushDevices");
+                });
+
             modelBuilder.Entity("PmpStudy.Core.Entities.Question", b =>
                 {
                     b.Property<int>("Id")

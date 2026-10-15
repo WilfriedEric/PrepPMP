@@ -21,6 +21,9 @@ public record CreateSessionRequest(
 public record AnswerRequest(int ItemId, List<int> OptionIds, int? ElapsedSeconds, bool? Flagged, bool? Doubt);
 public record BreakRequest(string Action);
 public record NoteRequest(int? Page, string Content, string? Tags, int? ChapterId, int? EcoTaskId);
+public record PushKeys(string P256dh, string Auth);
+public record PushSubscribeRequest(string Endpoint, PushKeys Keys);
+public record PushUnsubscribeRequest(string Endpoint);
 
 /// <summary>Petite API REST du brief : sert aussi aux imports et à l'export du bilan. Tout est authentifié.</summary>
 public static class StudyApi
@@ -156,6 +159,26 @@ public static class StudyApi
             else if (!int.TryParse(raw, out week)) return Results.BadRequest("Semaine attendue : un numéro, ou « current ».");
             var md = await reports.WeeklyMarkdownAsync(week);
             return Results.File(Encoding.UTF8.GetBytes(md), "text/markdown; charset=utf-8", $"bilan-semaine-{week}.md");
+        });
+
+        // ----- Notifications (PWA) -----
+        api.MapGet("/push/public-key", async (NotificationService push) => Results.Ok(new { publicKey = (await push.GetVapidKeysAsync()).PublicKey }));
+        api.MapPost("/push/subscribe", async (NotificationService push, PushSubscribeRequest r, HttpRequest http) =>
+        {
+            try { await push.SubscribeAsync(r.Endpoint, r.Keys.P256dh, r.Keys.Auth, http.Headers.UserAgent.ToString()); }
+            catch (ArgumentException ex) { return Results.BadRequest(ex.Message); }
+            return Results.NoContent();
+        });
+        api.MapPost("/push/unsubscribe", async (NotificationService push, PushUnsubscribeRequest r) =>
+        {
+            await push.UnsubscribeAsync(r.Endpoint);
+            return Results.NoContent();
+        });
+        api.MapPost("/push/test", async (NotificationService push) =>
+        {
+            var message = await push.BuildTodayMessageAsync() ?? new Core.Rules.ReminderMessage("PMP Study", "Tout est fait pour aujourd'hui. Bravo !", "/");
+            var (sent, removed, failed) = await push.SendToAllAsync(message);
+            return Results.Ok(new { sent, removed, failed });
         });
 
         api.MapGet("/export", async (ReportService reports, ContentService content, IStudyClock clock) =>

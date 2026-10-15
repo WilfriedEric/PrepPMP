@@ -28,6 +28,7 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
     public DbSet<SessionItem> SessionItems => Set<SessionItem>();
     public DbSet<ErrorEntry> ErrorEntries => Set<ErrorEntry>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
+    public DbSet<PushDevice> PushDevices => Set<PushDevice>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -116,6 +117,16 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
             // Pas d'action en base : SQL Server refuse deux chemins de cascade EcoTask → ErrorEntry (direct et via Question).
             e.HasOne(x => x.EcoTask).WithMany().OnDelete(DeleteBehavior.ClientSetNull);
             e.Ignore(x => x.IsIncomplete);
+        });
+
+        builder.Entity<PushDevice>(e =>
+        {
+            // 800 caractères : reste sous la limite de taille des clés d'index SQL Server.
+            e.Property(x => x.Endpoint).HasMaxLength(800);
+            e.HasIndex(x => x.Endpoint).IsUnique();
+            e.Property(x => x.P256dh).HasMaxLength(200);
+            e.Property(x => x.Auth).HasMaxLength(100);
+            e.Property(x => x.UserAgent).HasMaxLength(400);
         });
 
         builder.Entity<AppSetting>(e =>

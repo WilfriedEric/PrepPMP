@@ -1,0 +1,141 @@
+@using System.Text.Json
+@inject NotificationService Notifications
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudPaper Elevation="1" Class="pa-4 h-100">
+    <MudText Typo="Typo.h6">Rappel quotidien</MudText>
+    <MudText Typo="Typo.body2" Class="my-2">
+        Une notification chaque jour à l'heure choisie (fuseau de l'app), avec le programme restant : pages, questions, erreurs à revoir.
+        Pas de notification si la journée est déjà faite.
+    </MudText>
+
+    <MudSwitch T="bool" @bind-Value="enabled" Color="Color.Primary">Rappel activé</MudSwitch>
+    <MudTimePicker Label="Heure du rappel" @bind-Time="time" AmPm="false" Class="mt-2" Style="max-width: 200px" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Save">Enregistrer</MudButton>
+
+    <MudDivider Class="my-4" />
+    <MudText Typo="Typo.subtitle1">Cet appareil</MudText>
+    @switch (deviceState)
+    {
+        case "unsupported":
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                Ce navigateur ne gère pas les notifications. Sur iPhone : Safari → Partager → « Sur l'écran d'accueil », puis ouvre l'app depuis l'icône (iOS 16.4 ou plus).
+            </MudAlert>
+            break;
+        case "denied":
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">Notifications bloquées : autorise-les dans les réglages du navigateur pour ce site.</MudAlert>
+            break;
+        default:
+            <MudText Typo="Typo.body2" Class="mt-1">
+                @(subscribed ? "Cet appareil reçoit les rappels." : "Cet appareil ne reçoit pas encore les rappels.")
+            </MudText>
+            <MudStack Row="true" Class="mt-2" Wrap="Wrap.Wrap">
+                @if (subscribed)
+                {
+                    <MudButton Variant="Variant.Outlined" OnClick="Unsubscribe" Disabled="busy">Désactiver sur cet appareil</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="Subscribe" Disabled="busy">
+                        Activer sur cet appareil
+                    </MudButton>
+                }
+                <MudButton Variant="Variant.Text" OnClick="Test" Disabled="@(busy || devices == 0)">Envoyer un test</MudButton>
+            </MudStack>
+            break;
+    }
+    <MudText Typo="Typo.caption" Class="d-block mt-2">
+        @devices appareil(s) abonné(s). Pour l'installer comme une application : menu du navigateur → « Installer l'application » ou « Ajouter à l'écran d'accueil ».
+    </MudText>
+</MudPaper>
+
+@code {
+    private bool enabled;
+    private TimeSpan? time = DailyReminder.DefaultTime.ToTimeSpan();
+    private string deviceState = "default";
+    private bool subscribed;
+    private int devices;
+    private bool busy;
+
+    private record BrowserSubscription(string Endpoint, BrowserKeys Keys);
+    private record BrowserKeys(string P256dh, string Auth);
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await Notifications.GetReminderAsync();
+        enabled = settings.Enabled;
+        time = settings.Time.ToTimeSpan();
+        devices = (await Notifications.DevicesAsync()).Count;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        deviceState = await JS.InvokeAsync<string>("pmpPush.state");
+        if (deviceState != "unsupported")
+        {
+            var current = await JS.InvokeAsync<JsonElement?>("pmpPush.current");
+            subscribed = current is { ValueKind: JsonValueKind.Object } c
+                         && c.TryGetProperty("endpoint", out var ep)
+                         && await Notifications.IsSubscribedAsync(ep.GetString() ?? "");
+        }
+        StateHasChanged();
+    }
+
+    private async Task Save()
+    {
+        await Notifications.SaveReminderAsync(enabled, TimeOnly.FromTimeSpan(time ?? DailyReminder.DefaultTime.ToTimeSpan()));
+        Snackbar.Add(enabled ? $"Rappel enregistré pour {time:hh\\:mm}" : "Rappel désactivé", Severity.Success);
+    }
+
+    private async Task Subscribe()
+    {
+        busy = true;
+        try
+        {
+            var keys = await Notifications.GetVapidKeysAsync();
+            var json = await JS.InvokeAsync<JsonElement>("pmpPush.subscribe", keys.PublicKey);
+            var sub = json.Deserialize<BrowserSubscription>(Json)!;
+            await Notifications.SubscribeAsync(sub.Endpoint, sub.Keys.P256dh, sub.Keys.Auth, null);
+            subscribed = true;
+            devices = (await Notifications.DevicesAsync()).Count;
+            if (!enabled) { enabled = true; await Save(); }
+            Snackbar.Add("Notifications activées sur cet appareil", Severity.Success);
+        }
+        catch (JSException ex) { Snackbar.Add(ex.Message, Severity.Warning); }
+        finally
+        {
+            busy = false;
+            deviceState = await JS.InvokeAsync<string>("pmpPush.state");
+        }
+    }
+
+    private async Task Unsubscribe()
+    {
+        busy = true;
+        try
+        {
+            var endpoint = await JS.InvokeAsync<string?>("pmpPush.unsubscribe");
+            if (endpoint is not null) await Notifications.UnsubscribeAsync(endpoint);
+            subscribed = false;
+            devices = (await Notifications.DevicesAsync()).Count;
+        }
+        finally { busy = false; }
+    }
+
+    private async Task Test()
+    {
+        busy = true;
+        try
+        {
+            var message = await Notifications.BuildTodayMessageAsync() ?? new ReminderMessage("PMP Study", "Tout est fait pour aujourd'hui. Bravo !", "/");
+            var (sent, removed, failed) = await Notifications.SendToAllAsync(message);
+            Snackbar.Add($"Test : {sent} envoyée(s){(failed > 0 ? $", {failed} échec(s)" : "")}{(removed > 0 ? $", {removed} abonnement(s) expiré(s) retiré(s)" : "")}",
+                sent > 0 ? Severity.Success : Severity.Warning);
+            devices = (await Notifications.DevicesAsync()).Count;
+        }
+        finally { busy = false; }
+    }
+}

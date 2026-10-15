@@ -29,6 +29,8 @@ La base SQLite et le PDF vont dans `src/PmpStudy.Web/App_Data/` (ignoré par git
 | Bilan : scores par domaine, tâche et approche ; examens ; heures ; Markdown du dimanche | `/bilan` | 2 |
 | Import du plan, des chapitres et des questions ; réglages ; export complet | `/admin/import` | 1 |
 
+| Application installable (PWA) et rappel quotidien par notification, heure réglable | `/admin/import` | + |
+
 Le lot 3 (surlignage PDF, appariement, listes déroulantes, zones cliquables, hors ligne) reste à faire.
 
 ## Règles principales
@@ -37,6 +39,12 @@ Le lot 3 (surlignage PDF, appariement, listes déroulantes, zones cliquables, ho
 - **Examen** : tirage proportionnel à l'ECO (59 Personnes / 74 Processus / 47 Environnement d'affaires, environ 40 % prédictif), questions les moins vues d'abord. Une pause ne compte pas jusqu'à 10 min ; au-delà, le dépassement est déduit du temps restant.
 - **Carnet d'erreurs** : une entrée par question, créée pour toute réponse fausse ou marquée « doute » ; revue à J+1, J+3, J+7, J+14 ; une erreur remet à J+1 ; deux bonnes réponses de suite passent en « maîtrisée ». « Incomplète » tant que « pourquoi » et « piège » sont vides.
 - **Niveaux internes** : ≥ 80 % au-dessus de la cible, 70–79 % cible, 60–69 % sous la cible, < 60 % à renforcer.
+
+## Application installable et rappels
+
+- **Installation** : sur Android ou ordinateur, menu du navigateur → « Installer l'application ». Sur iPhone : Safari → Partager → « Sur l'écran d'accueil » (iOS 16.4 ou plus pour les notifications). Une page hors ligne s'affiche sans connexion ; rien d'authentifié n'est mis en cache.
+- **Rappel quotidien** : dans **Import et réglages → Rappel quotidien**, choisir l'heure (fuseau `Study:TimeZone`), puis « Activer sur cet appareil » sur chaque téléphone ou ordinateur. Le message reprend ce qui reste du jour (pages, questions, erreurs à revoir) ; aucun rappel si la journée est faite. Si le serveur était arrêté à l'heure prévue, le rappel part dans les 3 heures qui suivent, sinon il est sauté.
+- **Technique** : Web Push standard (VAPID, chiffrement aes128gcm), envoyé par le serveur ; les clés VAPID sont générées au premier usage et gardées en base, ou fournies par `Push:VapidPublicKey` / `Push:VapidPrivateKey`. Les notifications exigent HTTPS en production (App Service le fournit).
 
 ## Banque de questions
 
@@ -74,6 +82,7 @@ Toutes les routes exigent la connexion : `GET /api/plan/today`, `GET /api/course
 | `ConnectionStrings:Blob`, `Storage:Container` | — | compte de stockage, conteneur privé |
 | `Study:TimeZone` | `Africa/Abidjan` (GMT, sans heure d'été) | idem |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | — | active Application Insights |
+| `Push:VapidPublicKey`, `Push:VapidPrivateKey`, `Push:Subject` | générées et gardées en base | Key Vault (facultatif) ; `Push:Subject` = `mailto:` de contact |
 
 Les migrations existent pour les deux fournisseurs (`Migrations/Sqlite`, `Migrations/SqlServer`) et s'appliquent au démarrage. Pour en ajouter :
 

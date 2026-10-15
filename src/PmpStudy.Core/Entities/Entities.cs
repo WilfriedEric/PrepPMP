@@ -200,3 +200,15 @@ public class AppSetting
     public string Key { get; set; } = "";
     public string Value { get; set; } = "";
 }
+
+/// <summary>Appareil (navigateur ou PWA installée) abonné aux notifications de rappel.</summary>
+public class PushDevice
+{
+    public int Id { get; set; }
+    public string Endpoint { get; set; } = "";
+    public string P256dh { get; set; } = "";
+    public string Auth { get; set; } = "";
+    public string? UserAgent { get; set; }
+    public DateTime CreatedUtc { get; set; }
+    public DateTime? LastSuccessUtc { get; set; }
+}

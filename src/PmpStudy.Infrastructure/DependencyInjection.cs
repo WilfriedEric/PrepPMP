@@ -61,7 +61,11 @@ public static class DependencyInjection
         services.AddScoped<NoteService>();
         services.AddScoped<ReportService>();
         services.AddScoped<DataSeeder>();
+        services.AddScoped<NotificationService>();
+        services.AddHttpClient(nameof(WebPushSender), c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddSingleton<IPushSender, WebPushSender>();
         services.AddHostedService<ExpiredSessionCloser>();
+        services.AddHostedService<DailyReminderService>();
         return services;
     }
 

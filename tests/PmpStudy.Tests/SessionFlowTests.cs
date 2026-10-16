@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using PmpStudy.Core;
-using PmpStudy.Core.Entities;
-using PmpStudy.Core.Rules;
-using PmpStudy.Infrastructure.Services;
+using PmpStudy.Web.Model.Entities;
+using PmpStudy.Web.Model.Rules;
+using PmpStudy.Web.Model;
+using PmpStudy.Web.Services;
 
 namespace PmpStudy.Tests;
 
@@ -23,7 +23,7 @@ public class SeedTests
     public async Task Seeding_twice_does_not_duplicate()
     {
         await using var db = await TestDb.CreateAsync();
-        await new PmpStudy.Infrastructure.DataSeeder(db, db.Content, Microsoft.Extensions.Logging.Abstractions.NullLogger<PmpStudy.Infrastructure.DataSeeder>.Instance).SeedAsync();
+        await new PmpStudy.Web.Services.DataSeeder(db, db.Content, Microsoft.Extensions.Logging.Abstractions.NullLogger<PmpStudy.Web.Services.DataSeeder>.Instance).SeedAsync();
         await using var ctx = db.CreateDbContext();
         Assert.Equal(109, await ctx.Questions.CountAsync());
     }

@@ -1,8 +1,9 @@
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
-using PmpStudy.Core;
-using PmpStudy.Core.Entities;
-using PmpStudy.Infrastructure.Services;
+using PmpStudy.Web.Model.Entities;
+using PmpStudy.Web.Model.Rules;
+using PmpStudy.Web.Model;
+using PmpStudy.Web.Services;
 
 namespace PmpStudy.Web.Api;
 
@@ -176,7 +177,7 @@ public static class StudyApi
         });
         api.MapPost("/push/test", async (NotificationService push) =>
         {
-            var message = await push.BuildTodayMessageAsync() ?? new Core.Rules.ReminderMessage("PMP Study", "Tout est fait pour aujourd'hui. Bravo !", "/");
+            var message = await push.BuildTodayMessageAsync() ?? new ReminderMessage("PMP Study", "Tout est fait pour aujourd'hui. Bravo !", "/");
             var (sent, removed, failed) = await push.SendToAllAsync(message);
             return Results.Ok(new { sent, removed, failed });
         });
@@ -214,15 +215,15 @@ public static class StudyApi
         return new
         {
             s.Id, type = s.Type.ToString(), s.Title, s.StartUtc, s.EndUtc,
-            deadlineUtc = Core.Rules.SessionClock.EffectiveDeadline(s, clock.UtcNow),
-            remainingSeconds = (int)Core.Rules.SessionClock.Remaining(s, clock.UtcNow).TotalSeconds,
+            deadlineUtc = SessionClock.EffectiveDeadline(s, clock.UtcNow),
+            remainingSeconds = (int)SessionClock.Remaining(s, clock.UtcNow).TotalSeconds,
             s.ScorePercent, s.CorrectCount,
             sections = s.Sections.OrderBy(x => x.Index).Select(x => new { x.Index, x.StartUtc, x.EndUtc, x.BreakStartUtc, x.BreakEndUtc }),
             items = s.Items.OrderBy(i => i.Order).Select(i => new
             {
                 i.Id, i.Order, i.SectionIndex, i.QuestionId, stem = i.Question?.Stem, type = i.Question?.Type.ToString(),
                 options = i.Question?.Options.OrderBy(o => o.Order).Select(o => new { o.Id, o.Text, correct = reveal && (s.IsFinished || i.AnsweredUtc != null) ? o.IsCorrect : (bool?)null }),
-                answer = Core.Rules.Scoring.ParseAnswer(i.AnswerJson), i.Flagged, i.Doubt, i.TimeSeconds,
+                answer = Scoring.ParseAnswer(i.AnswerJson), i.Flagged, i.Doubt, i.TimeSeconds,
                 isCorrect = s.IsFinished || (s.FeedbackMode == FeedbackMode.Immediate && i.AnsweredUtc != null) ? i.IsCorrect : null,
                 explanation = s.IsFinished || (s.FeedbackMode == FeedbackMode.Immediate && i.AnsweredUtc != null) ? i.Question?.Explanation : null,
             }),

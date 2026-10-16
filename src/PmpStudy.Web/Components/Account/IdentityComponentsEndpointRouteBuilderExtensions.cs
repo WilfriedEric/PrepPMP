@@ -7,9 +7,9 @@ using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
-using PmpStudy.Web.Components.Account.Pages;
 using PmpStudy.Web.Components.Account.Pages.Manage;
-using PmpStudy.Infrastructure.Data;
+using PmpStudy.Web.Components.Account.Pages;
+using PmpStudy.Web.Data;
 
 namespace Microsoft.AspNetCore.Routing;
 

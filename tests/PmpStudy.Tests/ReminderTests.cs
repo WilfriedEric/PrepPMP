@@ -1,5 +1,5 @@
-using PmpStudy.Core;
-using PmpStudy.Core.Rules;
+using PmpStudy.Web.Model.Rules;
+using PmpStudy.Web.Model;
 
 namespace PmpStudy.Tests;
 

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
-using PmpStudy.Infrastructure.Data;
+using PmpStudy.Web.Data;
 
 namespace PmpStudy.Web.Components.Account;
 

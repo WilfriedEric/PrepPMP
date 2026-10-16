@@ -4,6 +4,21 @@ Application web personnelle pour préparer le PMP (format 2026) : lire le PMBOK 
 
 Blazor Web App (.NET 10, rendu interactif serveur), MudBlazor, EF Core (SQLite en local, Azure SQL en production), ASP.NET Core Identity avec double authentification, PDF.js pour le lecteur.
 
+## Structure
+
+Un seul projet web, `src/PmpStudy.Web`, contient toute l'application :
+
+| Dossier | Contenu |
+|---|---|
+| `Components/` | Pages et composants Blazor (interface, comptes) |
+| `Api/` | API REST minimale (`/api/...`) |
+| `Model/` | Entités, règles métier (chronomètre, scoring, tirage d'examen, répétition espacée, rappels), formats d'import |
+| `Data/` | Contexte EF Core, migrations SQLite et SQL Server, banque de questions de départ (`Seed/`) |
+| `Services/` | Sessions, carnet d'erreurs, contenus et imports, bilan, notes, notifications, stockage du PDF |
+| `wwwroot/` | CSS, JavaScript (lecteur PDF, notifications), PDF.js, manifeste et service worker |
+
+Les tests sont dans `tests/PmpStudy.Tests` (projet séparé, non déployé).
+
 ## Démarrer en local
 
 ```bash
@@ -66,7 +81,7 @@ Format d'import (tableau JSON, voir aussi `/admin/import`) :
 
 - `type` : `single` ou `multiple`. `approach` : `predictive`, `agile`, `hybrid`. Codes ECO : `PE-1`…`PE-8`, `PR-1`…`PR-10`, `EA-1`…`EA-8`.
 - Avec un `id`, une réimportation met la question à jour au lieu de la dupliquer.
-- Banque embarquée (`src/PmpStudy.Infrastructure/Seed/`) : 50 questions du test prédictif et 59 de l'examen blanc chapitres 1 à 12. Le document de l'examen blanc n'avait pas de corrigé : les réponses et explications ont été rédigées par Claude et sont signalées comme telles. La question 57 de ce document est écartée (énoncé et options ne correspondent pas).
+- Banque embarquée (`src/PmpStudy.Web/Data/Seed/`) : 50 questions du test prédictif et 59 de l'examen blanc chapitres 1 à 12. Le document de l'examen blanc n'avait pas de corrigé : les réponses et explications ont été rédigées par Claude et sont signalées comme telles. La question 57 de ce document est écartée (énoncé et options ne correspondent pas).
 
 ## API
 
@@ -84,13 +99,13 @@ Toutes les routes exigent la connexion : `GET /api/plan/today`, `GET /api/course
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | — | active Application Insights |
 | `Push:VapidPublicKey`, `Push:VapidPrivateKey`, `Push:Subject` | générées et gardées en base | Key Vault (facultatif) ; `Push:Subject` = `mailto:` de contact |
 
-Les migrations existent pour les deux fournisseurs (`Migrations/Sqlite`, `Migrations/SqlServer`) et s'appliquent au démarrage. Pour en ajouter :
+Les migrations existent pour les deux fournisseurs (`Data/Migrations/Sqlite`, `Data/Migrations/SqlServer`) et s'appliquent au démarrage. Pour en ajouter :
 
 ```bash
 dotnet tool restore
-cd src/PmpStudy.Infrastructure
-dotnet ef migrations add <Nom> --context SqliteAppDbContext --output-dir Migrations/Sqlite
-dotnet ef migrations add <Nom> --context SqlServerAppDbContext --output-dir Migrations/SqlServer
+cd src/PmpStudy.Web
+dotnet ef migrations add <Nom> --context SqliteAppDbContext --output-dir Data/Migrations/Sqlite
+dotnet ef migrations add <Nom> --context SqlServerAppDbContext --output-dir Data/Migrations/SqlServer
 ```
 
 Déploiement : `.github/workflows/deploy-azure.yml` (manuel) publie vers App Service Linux avec une connexion OIDC (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` en secrets, `AZURE_WEBAPP_NAME` en variable). Les ressources Azure restent à créer, et le coût mensuel à valider avec le calculateur de prix avant.

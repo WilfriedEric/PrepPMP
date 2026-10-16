@@ -21,8 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\PmpStudy.Core\PmpStudy.Core.csproj" />
-    <ProjectReference Include="..\..\src\PmpStudy.Infrastructure\PmpStudy.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\PmpStudy.Web\PmpStudy.Web.csproj" />
   </ItemGroup>
 
 </Project>

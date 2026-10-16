@@ -1,6 +1,6 @@
-using PmpStudy.Core.Entities;
-using PmpStudy.Core.Rules;
-using PmpStudy.Infrastructure.Services;
+using PmpStudy.Web.Model.Entities;
+using PmpStudy.Web.Model.Rules;
+using PmpStudy.Web.Services;
 
 namespace PmpStudy.Tests;
 

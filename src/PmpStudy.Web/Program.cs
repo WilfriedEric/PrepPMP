@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using MudBlazor.Services;
-using PmpStudy.Infrastructure;
-using PmpStudy.Infrastructure.Data;
 using PmpStudy.Web.Api;
-using PmpStudy.Web.Components;
 using PmpStudy.Web.Components.Account;
+using PmpStudy.Web.Components;
+using PmpStudy.Web.Data;
+using PmpStudy.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 

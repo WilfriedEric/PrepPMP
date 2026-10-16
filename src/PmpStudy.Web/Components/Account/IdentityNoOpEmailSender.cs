@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
-using PmpStudy.Infrastructure.Data;
+using Microsoft.AspNetCore.Identity;
+using PmpStudy.Web.Data;
 
 namespace PmpStudy.Web.Components.Account;
 

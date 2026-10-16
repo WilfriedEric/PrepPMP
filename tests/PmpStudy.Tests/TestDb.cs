@@ -2,11 +2,10 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
-using PmpStudy.Core.Entities;
-using PmpStudy.Core.Rules;
-using PmpStudy.Infrastructure;
-using PmpStudy.Infrastructure.Data;
-using PmpStudy.Infrastructure.Services;
+using PmpStudy.Web.Data;
+using PmpStudy.Web.Model.Entities;
+using PmpStudy.Web.Model.Rules;
+using PmpStudy.Web.Services;
 
 namespace PmpStudy.Tests;
 
@@ -60,7 +59,7 @@ public class FakePushSender : IPushSender
     public List<(string Endpoint, string Payload)> Sent { get; } = [];
     public HashSet<string> GoneEndpoints { get; } = [];
 
-    public Task<PushResult> SendAsync(PmpStudy.Core.Entities.PushDevice device, string payloadJson, VapidKeys keys, CancellationToken ct)
+    public Task<PushResult> SendAsync(PmpStudy.Web.Model.Entities.PushDevice device, string payloadJson, VapidKeys keys, CancellationToken ct)
     {
         if (GoneEndpoints.Contains(device.Endpoint)) return Task.FromResult(PushResult.Gone);
         Sent.Add((device.Endpoint, payloadJson));

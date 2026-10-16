@@ -73,6 +73,7 @@ Les tests sont dans `tests/PmpStudy.Tests` (projet séparé, non déployé). `de
 | Module | Route |
 |---|---|
 | Aujourd'hui : plan du jour, objectif de questions, semaine, compte à rebours, erreurs dues | `/` |
+| Plan de révision automatique : dates, pages ou sections, jours de repos, aperçu, section du jour | `/plan` |
 | Lecteur PDF : page du jour, chapitres, reprise, temps de lecture, notes par page | `/cours/{page}` |
 | Notes Markdown par page, chapitre et tâche ECO ; recherche ; export | `/notes` |
 | Entraînement chronométré (filtres domaine, tâche, approche, chapitre, source) | `/entrainement`, `/session/{id}` |
@@ -85,6 +86,8 @@ Les tests sont dans `tests/PmpStudy.Tests` (projet séparé, non déployé). `de
 | Mode hors ligne : entraînement, carnet d'erreurs, lecture du PDF, notes, synchronisation | `/hors-ligne/` |
 
 ### Règles principales
+
+- **Plan automatique** (`/plan`, réglé dans l'interface) : ce qui reste à lire, de la première page non lue jusqu'à la page de fin, est réparti sur les jours de lecture entre aujourd'hui et la date de fin (jours de repos et examens blancs exclus). Par sections, les sections restent dans l'ordre ; une section plus longue qu'une journée est découpée en parties. Les jours entre la fin de lecture et l'examen sont des jours de révision. Le plan est recalculé au premier affichage de chaque journée selon la lecture réelle ; les jours passés et la journée entamée ne bougent pas.
 
 - **Le serveur fait foi pour le temps** : échéance fixée à l'ouverture, réponses enregistrées une par une, clôture à l'échéance même navigateur fermé. Les questions sans réponse comptent comme fausses.
 - **Examen** : tirage proportionnel à l'ECO (59 Personnes / 74 Processus / 47 Environnement d'affaires, environ 40 % prédictif), questions les moins vues d'abord. Une pause ne compte pas jusqu'à 10 min ; au-delà, le dépassement est déduit du temps restant.

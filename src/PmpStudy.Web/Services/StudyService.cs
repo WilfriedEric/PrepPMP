@@ -51,7 +51,7 @@ public class TodaySummary
     public StudySession? OpenSession { get; init; }
 }
 
-public class StudyService(IDbContextFactory<AppDbContext> dbFactory, IStudyClock clock, TimeZoneSetting? timeZone = null)
+public class StudyService(IDbContextFactory<AppDbContext> dbFactory, IStudyClock clock, TimeZoneSetting? timeZone = null, PlanService? plan = null)
 {
     public static readonly DateOnly DefaultExamDate = new(2026, 12, 18);
     public const string DefaultSimulations = "2026-11-28";
@@ -124,6 +124,8 @@ public class StudyService(IDbContextFactory<AppDbContext> dbFactory, IStudyClock
 
     public async Task<TodaySummary> TodayAsync(CancellationToken ct = default)
     {
+        // Plan automatique : recalculé au premier affichage de la journée selon la progression.
+        if (plan is not null) await plan.RefreshIfStaleAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var today = clock.Today;
         var (startUtc, endUtc) = clock.DayBoundsUtc(today);

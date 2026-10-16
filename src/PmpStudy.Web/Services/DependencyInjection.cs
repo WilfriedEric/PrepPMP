@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.AddScoped<SessionService>();
         services.AddScoped<ErrorLogService>();
         services.AddScoped<ContentService>();
+        services.AddScoped<PlanService>();
         services.AddScoped<StudyService>();
         services.AddScoped<NoteService>();
         services.AddScoped<ReportService>();

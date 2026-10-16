@@ -46,9 +46,9 @@
         @if (today.PlanDay is not { } day)
         {
             <div class="empty">
-                <p>Aucun plan pour aujourd'hui. Importe ton plan de révision pour voir ici les pages et l'objectif de questions du jour.</p>
+                <p>Rien de prévu aujourd'hui. Règle ton plan de révision : dates, pages ou sections par jour, jours de repos. Il se calcule tout seul.</p>
                 <div class="actions">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="admin/import">Importer le plan</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="plan">Configurer le plan</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="StartDailyTraining" Disabled="busy">Entraînement libre</MudButton>
                 </div>
             </div>

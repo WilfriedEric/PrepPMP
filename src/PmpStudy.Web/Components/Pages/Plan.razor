@@ -1,0 +1,283 @@
+@page "/plan"
+@inject PlanService Plans
+@inject StudyService Study
+@inject IStudyClock Clock
+@inject ISnackbar Snackbar
+
+<PageTitle>Plan de révision · PMP Study</PageTitle>
+
+<header class="today-head">
+    <div>
+        <h1 class="today-title">Plan de révision</h1>
+        <div class="today-date">
+            @if (config?.Auto == true)
+            {
+                <span>Automatique : recalculé chaque jour selon ta lecture, jusqu'au @config.End.ToString("d MMMM", Fr).</span>
+            }
+            else
+            {
+                <span>Choisis tes dates et ton découpage : le plan se calcule tout seul.</span>
+            }
+        </div>
+    </div>
+    @if (summary is not null)
+    {
+        <div class="today-countdown">
+            <span class="today-countdown-number">@PerDay</span>
+            <span class="today-countdown-label">@PerDayLabel</span>
+        </div>
+    }
+</header>
+
+@if (config is null)
+{
+    <div class="today-grid">
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="420px" Class="rounded-lg" />
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="420px" Class="rounded-lg" />
+    </div>
+    return;
+}
+
+<div class="plan-grid">
+    <section class="panel" aria-labelledby="cfg-title">
+        <h2 id="cfg-title">Réglages</h2>
+        <div class="panel-sub">Tout est enregistré dans la base. L'aperçu se met à jour à chaque changement.</div>
+
+        <div class="plan-form">
+            <MudDatePicker Label="Début" Date="Start" DateChanged="d => Set(() => config.Start = DateOnly.FromDateTime(d ?? DateTime.Today))"
+                           DateFormat="dd/MM/yyyy" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudDatePicker Label="Fin de la lecture" Date="End" DateChanged="d => Set(() => config.End = DateOnly.FromDateTime(d ?? DateTime.Today))"
+                           DateFormat="dd/MM/yyyy" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           HelperText="@($"Examen le {examDate.ToString("d MMMM", Fr)} : les jours après la fin de lecture servent à réviser.")" />
+        </div>
+
+        <div class="plan-field-label">Découpage</div>
+        <MudToggleGroup T="PlanUnit" Value="config.Unit" ValueChanged="u => Set(() => config.Unit = u)" Color="Color.Primary" Size="Size.Small" Outlined="true" Class="plan-toggle">
+            <MudToggleItem Value="PlanUnit.Sections" Text="Sections du cours" />
+            <MudToggleItem Value="PlanUnit.Pages" Text="Pages" />
+        </MudToggleGroup>
+        @if (config.Unit == PlanUnit.Sections && summary?.RemainingSections == 0 && summary.RemainingPages > 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                Aucune section connue : lis les signets du PDF dans <MudLink Href="admin/import">Réglages et imports</MudLink>, ou choisis « Pages ».
+            </MudAlert>
+        }
+
+        <div class="plan-form">
+            <MudNumericField T="int" Label="De la page" Value="config.FromPage" ValueChanged="v => Set(() => config.FromPage = Math.Max(1, v))" Min="1"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="int" Label="À la page" Value="config.ToPage" ValueChanged="v => Set(() => config.ToPage = Math.Max(config.FromPage, v))" Min="1"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="Pages imprimées du livre" />
+            <MudNumericField T="int" Label="Reprendre à la page" Value="resume" ValueChanged="v => { resumeEdited = true; return Set(() => resume = Math.Max(config.FromPage, v)); }" Min="1"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@($"Première page non lue d'après ta lecture : {computedResume}")" />
+            <MudNumericField T="int" Label="Questions par jour" Value="config.QuestionGoal" ValueChanged="v => Set(() => config.QuestionGoal = Math.Clamp(v, 0, 300))" Min="0" Max="300"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </div>
+
+        <div class="plan-field-label">Jours de repos</div>
+        <div class="day-picker" role="group" aria-label="Jours de repos">
+            @foreach (var d in Week)
+            {
+                var rest = config.RestDays.Contains(d);
+                <button type="button" class="day-chip @(rest ? "on" : "")" aria-pressed="@(rest ? "true" : "false")" @onclick="() => ToggleRest(d)">
+                    @Fr.DateTimeFormat.GetAbbreviatedDayName(d).TrimEnd('.')
+                </button>
+            }
+        </div>
+        <MudSwitch T="bool" Value="config.SkipSimulations" ValueChanged="v => Set(() => config.SkipSimulations = v)" Color="Color.Primary" Class="mt-3">
+            Pas de lecture les jours d'examen blanc
+        </MudSwitch>
+
+        <div class="actions">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Generate" Disabled="busy" StartIcon="@Icons.Material.Rounded.AutoAwesome">
+                @(config.Auto ? "Enregistrer et recalculer" : "Générer le plan")
+            </MudButton>
+            @if (config.Auto)
+            {
+                <MudButton Variant="Variant.Text" OnClick="DisableAuto" Disabled="busy">Arrêter le recalcul automatique</MudButton>
+            }
+        </div>
+    </section>
+
+    <div class="side-stack">
+        @if (summary is not null)
+        {
+            @foreach (var w in summary.Warnings)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">@w</MudAlert>
+            }
+
+            <section class="panel panel-accent" aria-labelledby="today-title">
+                <h2 id="today-title">Aujourd'hui</h2>
+                @if (todayDraft is null)
+                {
+                    <div class="panel-sub">Jour de repos : rien de prévu.</div>
+                }
+                else
+                {
+                    <div class="panel-sub">@KindLabel(todayDraft)</div>
+                    <div class="plan-today">@todayDraft.Label</div>
+                    @if (todayDraft.PageFrom is { } pf)
+                    {
+                        <div class="task-meta">Pages @pf à @todayDraft.PageTo · @(todayDraft.PageTo - pf + 1) pages</div>
+                    }
+                    @if (todayDraft.Sections.Count > 0)
+                    {
+                        <ul class="plan-sections">
+                            @foreach (var s in todayDraft.Sections)
+                            {
+                                <li><span class="mono">@s.Code</span> @s.Title <span class="task-meta">p. @s.From–@s.To</span></li>
+                            }
+                        </ul>
+                    }
+                    <div class="actions">
+                        @if (todayDraft.PageFrom is { } start)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"cours/{start + offset}")" StartIcon="@Icons.Material.Rounded.MenuBook">Lire maintenant</MudButton>
+                        }
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="entrainement">@todayDraft.QuestionGoal questions</MudButton>
+                    </div>
+                }
+            </section>
+
+            <section class="panel" aria-labelledby="sum-title">
+                <h2 id="sum-title">Répartition</h2>
+                <div class="metric-row plan-metrics">
+                    <div class="metric"><div class="metric-value">@summary.RemainingPages</div><div class="metric-label">pages à lire</div></div>
+                    <div class="metric"><div class="metric-value">@summary.ReadingDays</div><div class="metric-label">jours de lecture</div></div>
+                    <div class="metric"><div class="metric-value">@Num(summary.PagesPerDay)</div><div class="metric-label">pages par jour</div></div>
+                    @if (summary.SectionsPerDay >= 1 || summary.SectionsPerDay == 0)
+                    {
+                        <div class="metric"><div class="metric-value">@Num(summary.SectionsPerDay)</div><div class="metric-label">sections par jour</div></div>
+                    }
+                    else
+                    {
+                        <div class="metric"><div class="metric-value">@Num(Math.Round(1 / summary.SectionsPerDay, 1))</div><div class="metric-label">jours par section</div></div>
+                    }
+                </div>
+                <div class="panel-sub mt-3">
+                    @if (summary.ReadingEnds is { } re)
+                    {
+                        <span>Lecture terminée le @re.ToString("dddd d MMMM", Fr), puis @summary.Days.Count(d => d.Kind == PlanDayKind.Review && d.Date > re) jour(s) de révision avant l'examen.</span>
+                    }
+                    else if (summary.RemainingPages == 0)
+                    {
+                        <span>Tout le programme est lu : les jours restants sont consacrés à la révision.</span>
+                    }
+                </div>
+            </section>
+
+            <section class="panel" aria-labelledby="cal-title">
+                <div class="row-between">
+                    <h2 id="cal-title">Calendrier</h2>
+                    <span class="panel-sub">@summary.Days.Count jour(s) jusqu'à l'examen</span>
+                </div>
+                <ol class="plan-days">
+                    @foreach (var d in summary.Days.Take(showAll ? int.MaxValue : 14))
+                    {
+                        <li class="plan-day @(d.Kind.ToString().ToLowerInvariant()) @(d.Date == today ? "is-today" : "")">
+                            <div class="plan-day-date">
+                                <span class="plan-day-dow">@d.Date.ToString("ddd", Fr).TrimEnd('.')</span>
+                                <span class="plan-day-num">@d.Date.Day</span>
+                                <span class="plan-day-month">@d.Date.ToString("MMM", Fr).TrimEnd('.')</span>
+                            </div>
+                            <div class="plan-day-body">
+                                <div class="plan-day-label">@d.Label</div>
+                                <div class="task-meta">
+                                    @if (d.PageFrom is { } a) { <span>p. @a–@d.PageTo · </span> }
+                                    @d.QuestionGoal questions
+                                </div>
+                            </div>
+                        </li>
+                    }
+                </ol>
+                @if (summary.Days.Count > 14)
+                {
+                    <MudButton Variant="Variant.Text" Class="mt-2" OnClick="() => showAll = !showAll">@(showAll ? "Réduire" : $"Afficher les {summary.Days.Count} jours")</MudButton>
+                }
+            </section>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+    private static readonly DayOfWeek[] Week = [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+
+    private PlanConfig? config;
+    private PlanSummary? summary;
+    private PlanDraft? todayDraft;
+    private int resume, computedResume, offset;
+    private DateOnly examDate, today;
+    private bool busy, showAll, resumeEdited;
+
+    private DateTime? Start => config?.Start.ToDateTime(TimeOnly.MinValue);
+    private DateTime? End => config?.End.ToDateTime(TimeOnly.MinValue);
+
+    // Moins d'une section par jour : les sections sont découpées, le rythme se lit en pages.
+    private bool BySections => config?.Unit == PlanUnit.Sections && summary!.SectionsPerDay >= 1;
+    private string PerDay => BySections ? Num(summary!.SectionsPerDay) : Num(summary!.PagesPerDay);
+    private string PerDayLabel => BySections
+        ? $"sections par jour (≈ {Num(summary.PagesPerDay)} pages)"
+        : "pages par jour";
+
+    protected override async Task OnInitializedAsync()
+    {
+        today = Clock.Today;
+        examDate = await Study.ExamDateAsync();
+        offset = await Study.PageOffsetAsync();
+        config = await Plans.GetConfigAsync();
+        computedResume = resume = await Plans.ResumePageAsync(config);
+        await Preview();
+    }
+
+    private async Task Set(Action change)
+    {
+        change();
+        if (config!.End < config.Start) config.End = config.Start;
+        if (config.ToPage < config.FromPage) config.ToPage = config.FromPage;
+        computedResume = await Plans.ResumePageAsync(config);
+        resume = resumeEdited ? Math.Max(resume, config.FromPage) : computedResume;
+        await Preview();
+    }
+
+    private Task ToggleRest(DayOfWeek d) => Set(() =>
+    {
+        if (!config!.RestDays.Remove(d)) config.RestDays.Add(d);
+    });
+
+    private async Task Preview()
+    {
+        summary = await Plans.PreviewAsync(config!, resume);
+        todayDraft = summary.Days.FirstOrDefault(d => d.Date == today);
+    }
+
+    private async Task Generate()
+    {
+        busy = true;
+        try
+        {
+            summary = await Plans.SaveAndGenerateAsync(config!, resume);
+            config!.Auto = true;
+            todayDraft = summary.Days.FirstOrDefault(d => d.Date == today) ?? todayDraft;
+            Snackbar.Add($"Plan enregistré : {summary.Days.Count} jour(s) jusqu'à l'examen. Il sera recalculé chaque jour selon ta lecture.", Severity.Success);
+        }
+        finally { busy = false; }
+    }
+
+    private async Task DisableAuto()
+    {
+        await Plans.DisableAutoAsync();
+        config!.Auto = false;
+        Snackbar.Add("Recalcul automatique arrêté : le plan actuel reste en place.", Severity.Info);
+    }
+
+    private static string KindLabel(PlanDraft d) => d.Kind switch
+    {
+        PlanDayKind.Reading => "Lecture proposée",
+        PlanDayKind.Simulation => "Journée examen blanc",
+        _ => "Journée de révision",
+    };
+
+    private static string Num(double v) => v.ToString(v % 1 == 0 ? "0" : "0.#", Fr);
+}

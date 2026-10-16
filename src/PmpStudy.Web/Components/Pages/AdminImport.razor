@@ -36,8 +36,12 @@
             </MudFileUpload>
             @if (busy) { <MudProgressLinear Indeterminate="true" Class="mt-2" /> }
 
-            <MudText Typo="Typo.subtitle1" Class="mt-4">Chapitres</MudText>
-            <MudText Typo="Typo.body2">@chapterCount chapitre(s) en base.</MudText>
+            <MudText Typo="Typo.subtitle1" Class="mt-4">Chapitres et sections</MudText>
+            <MudText Typo="Typo.body2">@chapterCount chapitre(s) en base. Ils servent au plan « par sections » et au lecteur.</MudText>
+            @if (pdfLength is not null)
+            {
+                <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="ReadBookmarks" Disabled="busy" StartIcon="@Icons.Material.Rounded.Bookmarks">Lire les signets du PDF</MudButton>
+            }
             @if (extracted.Count > 0)
             {
                 <MudText Typo="Typo.body2" Class="mt-2">@extracted.Count signets lus dans le PDF :</MudText>
@@ -60,16 +64,24 @@
         <MudPaper Elevation="1" Class="pa-4 h-100">
             <MudText Typo="Typo.h6">2. Plan de révision</MudText>
             <MudText Typo="Typo.body2" Class="my-2">
-                Une entrée par jour ; une date existante est mise à jour. @planCount jour(s) en base.
+                Le plan se règle dans l'interface : dates de début et de fin, lecture par pages ou par sections, jours de repos,
+                objectif de questions. Il est recalculé chaque jour selon ta lecture. @planCount jour(s) planifié(s).
             </MudText>
-            <MudStack Row="true" Spacing="2">
-                <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="f => ReadInto(f, v => planJson = v)">
-                    <ActivatorContent><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen">Ouvrir un fichier</MudButton></ActivatorContent>
-                </MudFileUpload>
-                <MudButton Variant="Variant.Text" OnClick="DownloadPlanSample">Modèle</MudButton>
-            </MudStack>
-            <MudTextField @bind-Value="planJson" Immediate="true" DebounceInterval="400" Lines="8" Variant="Variant.Outlined" Class="mt-2" Placeholder="@PlanSample" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportPlan" Disabled="@string.IsNullOrWhiteSpace(planJson)">Importer le plan</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="plan" StartIcon="@Icons.Material.Rounded.CalendarMonth">Configurer le plan</MudButton>
+
+            <MudExpansionPanels Elevation="0" Class="mt-4">
+                <MudExpansionPanel Text="Avancé : importer un plan JSON (plan manuel)">
+                    <MudText Typo="Typo.body2" Class="mb-2">Une entrée par jour ; une date existante est mise à jour. Pense à arrêter le recalcul automatique dans la page Plan.</MudText>
+                    <MudStack Row="true" Spacing="2">
+                        <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="f => ReadInto(f, v => planJson = v)">
+                            <ActivatorContent><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen">Ouvrir un fichier</MudButton></ActivatorContent>
+                        </MudFileUpload>
+                        <MudButton Variant="Variant.Text" OnClick="DownloadPlanSample">Modèle</MudButton>
+                    </MudStack>
+                    <MudTextField @bind-Value="planJson" Immediate="true" DebounceInterval="400" Lines="6" Variant="Variant.Outlined" Class="mt-2" Placeholder="@PlanSample" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2" OnClick="ImportPlan" Disabled="@string.IsNullOrWhiteSpace(planJson)">Importer le plan</MudButton>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
         </MudPaper>
     </MudItem>
 
@@ -95,7 +107,16 @@
         <MudPaper Elevation="1" Class="pa-4 h-100">
             <MudText Typo="Typo.h6">4. Réglages</MudText>
             <MudDatePicker Label="Date de l'examen" Date="examDate" DateChanged="d => examDate = d" DateFormat="dd/MM/yyyy" Class="mt-2" />
-            <MudTextField @bind-Value="simulations" Label="Dates des simulations (AAAA-MM-JJ, séparées par des virgules)" Class="mt-2" />
+            <MudText Typo="Typo.caption" Class="d-block mt-3">Examens blancs prévus</MudText>
+            <div class="sim-row">
+                @foreach (var d in simDates)
+                {
+                    <MudChip T="string" OnClose="() => simDates.Remove(d)" Size="Size.Small">@d.ToString("ddd d MMM yyyy", Fr)</MudChip>
+                }
+                @if (simDates.Count == 0) { <span class="mud-text-secondary">Aucun</span> }
+            </div>
+            <MudDatePicker Label="Ajouter un examen blanc" Date="null" DateChanged="AddSimulation" DateFormat="dd/MM/yyyy" Class="mt-1"
+                           HelperText="Ces jours-là, le plan prévoit l'examen blanc au lieu de la lecture." />
             <MudNumericField @bind-Value="weeklyHours" Label="Heures de révision prévues par semaine" Min="1" Max="60" Class="mt-2" />
             <MudSelect T="string" @bind-Value="timeZone" Label="Fuseau horaire" Class="mt-2" HelperText="Sert à définir « aujourd'hui » et l'heure du rappel.">
                 @foreach (var (id, label) in TimeZones)
@@ -147,7 +168,8 @@
     private List<ChapterImport> extracted = [];
     private string? chaptersJson, planJson;
     private DateTime? examDate;
-    private string? simulations;
+    private List<DateOnly> simDates = [];
+    private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
     private double weeklyHours = StudyService.DefaultWeeklyHours;
     private int pageOffset;
     private string timeZone = TimeZoneSetting.DefaultId;
@@ -183,7 +205,7 @@
         chapterCount = (await Content.ChaptersAsync()).Count;
         planCount = (await Content.PlanAsync()).Count;
         examDate = (await Study.ExamDateAsync()).ToDateTime(TimeOnly.MinValue);
-        simulations = string.Join(", ", (await Study.SimulationDatesAsync()).Select(d => d.ToString("yyyy-MM-dd")));
+        simDates = (await Study.SimulationDatesAsync()).Order().ToList();
         weeklyHours = double.TryParse(settings.GetValueOrDefault(SettingKeys.WeeklyHoursTarget), NumberStyles.Float, CultureInfo.InvariantCulture, out var w) ? w : StudyService.DefaultWeeklyHours;
         pageOffset = await Study.PageOffsetAsync();
         timeZone = settings.GetValueOrDefault(SettingKeys.TimeZone) ?? TimeZoneSetting.DefaultId;
@@ -215,6 +237,30 @@
         {
             Logger.LogWarning(ex, "Échec du chargement du PDF");
             Snackbar.Add($"Échec : {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            File.Delete(temp);
+            busy = false;
+        }
+    }
+
+    private async Task ReadBookmarks()
+    {
+        busy = true;
+        var temp = Path.GetTempFileName();
+        try
+        {
+            await using (var source = await PdfStore.OpenReadAsync())
+            await using (var target = File.Create(temp))
+                if (source is not null) await source.CopyToAsync(target);
+            extracted = ContentService.ExtractChapters(temp);
+            if (extracted.Count == 0) Snackbar.Add("Ce PDF n'a pas de signets : importe les chapitres en JSON ou choisis le plan par pages.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Lecture des signets en échec");
+            Snackbar.Add($"Lecture impossible : {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -293,10 +339,16 @@
     private async Task DownloadPlanSample() =>
         await JS.InvokeVoidAsync("pmpStudy.download", "plan-modele.json", "application/json", PlanSample);
 
+    private void AddSimulation(DateTime? date)
+    {
+        if (date is { } d && !simDates.Contains(DateOnly.FromDateTime(d)))
+            simDates = simDates.Append(DateOnly.FromDateTime(d)).Order().ToList();
+    }
+
     private async Task SaveSettings()
     {
         if (examDate is { } d) await Study.SetSettingAsync(SettingKeys.ExamDate, DateOnly.FromDateTime(d).ToString("yyyy-MM-dd"));
-        await Study.SetSettingAsync(SettingKeys.SimulationDates, simulations ?? "");
+        await Study.SetSettingAsync(SettingKeys.SimulationDates, string.Join(",", simDates.Distinct().Order().Select(d => d.ToString("yyyy-MM-dd"))));
         await Study.SetSettingAsync(SettingKeys.WeeklyHoursTarget, weeklyHours.ToString(CultureInfo.InvariantCulture));
         await Study.SetSettingAsync(SettingKeys.PageOffset, pageOffset.ToString(CultureInfo.InvariantCulture));
         await Study.SetSettingAsync(SettingKeys.TimeZone, timeZone);

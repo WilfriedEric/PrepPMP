@@ -1,14 +1,41 @@
 @inherits LayoutComponentBase
+@inject StudyService Study
+@inject IStudyClock Clock
+@inject IWebHostEnvironment Env
 
-<HeadContent>
-    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
-</HeadContent>
-
-<div class="account-shell">
-    <header class="account-header">
-        <a href="/" class="account-brand">PMP Study</a>
-    </header>
-    <main class="container py-4">
-        @Body
+<div class="auth-shell">
+    <main class="auth-main">
+        <a href="" class="auth-brand">
+            <img src="icons/icon-192.png" alt="" width="32" height="32" />
+            <span>PMP Study</span>
+        </a>
+        <div class="auth-card">
+            @Body
+        </div>
     </main>
+    <aside class="auth-aside @(hasPhoto ? "with-photo" : "")" aria-hidden="true">
+        <div class="auth-aside-inner">
+            <div class="auth-countdown">
+                <span class="auth-countdown-number">@(daysLeft > 0 ? daysLeft : 0)</span>
+                <span class="auth-countdown-label">@(daysLeft == 1 ? "jour" : "jours") avant l'examen</span>
+            </div>
+            <p class="auth-aside-text">Examen PMP le @examDate.ToString("d MMMM yyyy", Fr). Un peu chaque jour, et le carnet d'erreurs fait le reste.</p>
+        </div>
+    </aside>
 </div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+    private DateOnly examDate;
+    private int daysLeft;
+    private bool hasPhoto;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { examDate = await Study.ExamDateAsync(); }
+        catch (Exception) { examDate = StudyService.DefaultExamDate; }
+        daysLeft = examDate.DayNumber - Clock.Today.DayNumber;
+        // Photo facultative : déposer wwwroot/img/login.jpg pour l'afficher en fond du panneau.
+        hasPhoto = File.Exists(Path.Combine(Env.WebRootPath, "img", "login.jpg"));
+    }
+}

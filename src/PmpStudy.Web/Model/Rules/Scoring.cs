@@ -86,7 +86,7 @@ public static class Scoring
             .GroupBy(i => i.Question!.EcoTask!.Code)
             .Select(g => (Task: g.First().Question!.EcoTask!, Items: g))
             .OrderBy(g => g.Task.Domain).ThenBy(g => EcoCatalog.SortKey(g.Task.Code))
-            .Select(g => new ScoreLine(g.Task.Code, $"{g.Task.Code} — {g.Task.Title}", g.Items.Count(i => i.IsCorrect == true), g.Items.Count()))
+            .Select(g => new ScoreLine(g.Task.Code, $"{g.Task.Code} · {g.Task.Title}", g.Items.Count(i => i.IsCorrect == true), g.Items.Count()))
             .ToList();
 
     public static IReadOnlyList<ScoreLine> ByApproach(IEnumerable<SessionItem> items) =>

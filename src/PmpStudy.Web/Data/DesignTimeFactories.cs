@@ -10,11 +10,11 @@ namespace PmpStudy.Web.Data;
 public static class IdentitySchema
 {
     /// <summary>
-    /// Identity lit la version du schéma (v3 : clés d'accès) dans les options de l'application.
-    /// Hors de l'application (outils EF, tests), on fournit les mêmes options pour obtenir le même modèle.
+    /// Identity lit la version de son schéma dans les options de l'application. Hors de l'application
+    /// (outils EF, tests), on fournit les mêmes options (version par défaut) pour obtenir le même modèle.
     /// </summary>
     public static readonly IServiceProvider Services = new ServiceCollection()
-        .Configure<IdentityOptions>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
+        .Configure<IdentityOptions>(_ => { })
         .BuildServiceProvider();
 }
 

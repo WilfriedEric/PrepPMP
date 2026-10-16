@@ -487,3 +487,7 @@ App_Data/
 *.db-shm
 *.db-wal
 *.pdf
+
+# Publication et configuration de production (contient la chaîne de connexion : jamais versionnée)
+publish/
+appsettings.Production.json

@@ -9,23 +9,23 @@ namespace PmpStudy.Tests;
 public class SeedTests
 {
     [Fact]
-    public async Task Seed_loads_eco_tasks_and_both_question_banks_without_errors()
+    public async Task Startup_creates_eco_tasks_and_bank_imports_cleanly()
     {
         await using var db = await TestDb.CreateAsync();
         await using var ctx = db.CreateDbContext();
         Assert.Equal(26, await ctx.EcoTasks.CountAsync());
-        Assert.Equal(50, await ctx.Questions.CountAsync(q => q.Source == "Test prédictif"));
-        Assert.Equal(59, await ctx.Questions.CountAsync(q => q.Source == "Examen blanc ch. 1-12"));
+        Assert.Equal(78, await ctx.Questions.CountAsync());
         Assert.True(await ctx.Questions.AllAsync(q => q.EcoTaskId != null));
     }
 
     [Fact]
-    public async Task Seeding_twice_does_not_duplicate()
+    public async Task Startup_seeding_twice_does_not_duplicate_eco_tasks()
     {
-        await using var db = await TestDb.CreateAsync();
-        await new PmpStudy.Web.Services.DataSeeder(db, db.Content, Microsoft.Extensions.Logging.Abstractions.NullLogger<PmpStudy.Web.Services.DataSeeder>.Instance).SeedAsync();
+        await using var db = await TestDb.CreateAsync(seedQuestions: false);
+        await new PmpStudy.Web.Services.DataSeeder(db).SeedAsync();
         await using var ctx = db.CreateDbContext();
-        Assert.Equal(109, await ctx.Questions.CountAsync());
+        Assert.Equal(26, await ctx.EcoTasks.CountAsync());
+        Assert.Equal(0, await ctx.Questions.CountAsync());
     }
 
     [Fact]

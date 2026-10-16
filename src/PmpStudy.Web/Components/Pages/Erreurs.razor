@@ -6,7 +6,7 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>Carnet d'erreurs — PMP Study</PageTitle>
+<PageTitle>Carnet d'erreurs · PMP Study</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-4">
     <MudText Typo="Typo.h4">Carnet d'erreurs</MudText>
@@ -29,9 +29,9 @@
         <MudGrid Spacing="2">
             <MudItem xs="12" md="8"><MudTextField @bind-Value="draft.Summary" Label="Résumé de la question et de la bonne réponse" Lines="3" AutoGrow="true" Required="true" /></MudItem>
             <MudItem xs="12" md="4">
-                <MudTextField @bind-Value="draft.Source" Label="Source" Placeholder="PMI Study Hall — mini-examen 3" />
+                <MudTextField @bind-Value="draft.Source" Label="Source" Placeholder="PMI Study Hall · mini-examen 3" />
                 <MudSelect T="int?" @bind-Value="draft.EcoTaskId" Label="Tâche ECO" Clearable="true">
-                    @foreach (var t in ecoTasks) { <MudSelectItem T="int?" Value="t.Id">@t.Code — @t.Title</MudSelectItem> }
+                    @foreach (var t in ecoTasks) { <MudSelectItem T="int?" Value="t.Id">@t.Code · @t.Title</MudSelectItem> }
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="draft.Why" Label="Pourquoi" Lines="2" AutoGrow="true" /></MudItem>
@@ -99,7 +99,7 @@
                     <MudItem xs="12" md="4"><MudTextField @bind-Value="e.MindsetReflex" Label="Réflexe mindset" Lines="2" AutoGrow="true" Margin="Margin.Dense" /></MudItem>
                     <MudItem xs="12" md="4">
                         <MudSelect T="int?" @bind-Value="e.EcoTaskId" Label="Tâche ECO" Clearable="true" Margin="Margin.Dense">
-                            @foreach (var t in ecoTasks) { <MudSelectItem T="int?" Value="t.Id">@t.Code — @t.Title</MudSelectItem> }
+                            @foreach (var t in ecoTasks) { <MudSelectItem T="int?" Value="t.Id">@t.Code · @t.Title</MudSelectItem> }
                         </MudSelect>
                     </MudItem>
                 </MudGrid>

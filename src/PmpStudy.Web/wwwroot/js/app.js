@@ -69,3 +69,13 @@ function base64UrlToBytes(value) {
     const raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'));
     return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
+
+// ---------- Thème mémorisé sur l'appareil ----------
+window.pmpTheme = {
+    get: function () {
+        try { return localStorage.getItem('pmp-theme'); } catch { return null; }
+    },
+    set: function (value) {
+        try { localStorage.setItem('pmp-theme', value); } catch { /* stockage indisponible : thème non mémorisé */ }
+    }
+};

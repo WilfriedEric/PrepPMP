@@ -10,7 +10,9 @@ using PmpStudy.Web.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents()
+    // Imports collés dans les champs texte (plusieurs centaines de questions) : messages plus gros que les 32 Ko par défaut.
+    .AddHubOptions(o => o.MaximumReceiveMessageSize = 8 * 1024 * 1024);
 builder.Services.AddMudServices();
 
 builder.Services.AddCascadingAuthenticationState();
@@ -30,9 +32,8 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
     {
-        // Compte unique, pas d'envoi d'e-mails : pas de confirmation de compte.
+        // Compte unique, identifiant et mot de passe : pas de confirmation par e-mail ni de double authentification.
         options.SignIn.RequireConfirmedAccount = false;
-        options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
         options.Password.RequiredLength = 10;
         options.Lockout.MaxFailedAccessAttempts = 5;
         options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
@@ -50,7 +51,6 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Events.OnRedirectToAccessDenied = ctx => ApiAwareRedirect(ctx, StatusCodes.Status403Forbidden);
 });
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
 if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
     builder.Services.AddApplicationInsightsTelemetry();
@@ -85,6 +85,8 @@ app.MapRazorComponents<App>()
 
 app.MapAdditionalIdentityEndpoints();
 app.MapStudyApi();
+// Sonde publique pour un service de surveillance (garde l'app réveillée sur un hébergement mutualisé).
+app.MapGet("/health", () => Results.Text("ok")).AllowAnonymous();
 
 app.Run();
 

@@ -65,7 +65,7 @@ else if (reviewing)
                     <tr class="clickable" @onclick="() => { reviewing = false; LoadItem(i); }">
                         <td>@it.Order</td>
                         <td>@Shorten(it.Question?.Stem)</td>
-                        <td>@(it.AnswerJson is { Length: > 2 } ? "✓" : "—")</td>
+                        <td>@(it.AnswerJson is { Length: > 2 } ? "✓" : "-")</td>
                         <td>@(it.Flagged ? "🚩 " : "")@(it.Doubt ? "doute" : "")</td>
                     </tr>
                 }

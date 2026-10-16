@@ -2,79 +2,129 @@
 @implements IDisposable
 @inject NavigationManager Nav
 @inject ErrorLogService Errors
+@inject StudyService Study
+@inject IStudyClock Clock
+@inject IJSRuntime JS
 
-<MudThemeProvider Theme="theme" @bind-IsDarkMode="dark" ObserveSystemThemeChange="true" />
+<MudThemeProvider @ref="themeProvider" Theme="AppTheme.Theme" IsDarkMode="dark" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="1" Dense="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="() => drawerOpen = !drawerOpen" aria-label="Menu" />
-        <MudText Typo="Typo.h6" Class="ml-2">PMP Study</MudText>
+    <MudAppBar Elevation="0" Dense="false" Class="app-bar">
+        <MudIconButton Icon="@Icons.Material.Rounded.Menu" Edge="Edge.Start" OnClick="() => drawerOpen = !drawerOpen" aria-label="Menu" Class="d-lg-none" />
+        <a href="" class="brand">
+            <img src="icons/icon-192.png" alt="" width="28" height="28" />
+            <span>PMP Study</span>
+        </a>
         <MudSpacer />
+        @if (daysLeft is { } d)
+        {
+            <span class="countdown-pill" title="Examen le @examDate.ToString("d MMMM yyyy", Fr)">J-@Math.Max(0, d)</span>
+        }
+        <MudIconButton Icon="@(dark ? Icons.Material.Rounded.LightMode : Icons.Material.Rounded.DarkMode)" OnClick="ToggleTheme"
+                       aria-label="@(dark ? "Thème clair" : "Thème sombre")" Class="ml-1" />
         <AuthorizeView>
             <Authorized>
-                <MudText Typo="Typo.body2" Class="mr-2 d-none d-sm-flex">@context.User.Identity?.Name</MudText>
-                <form action="Account/Logout" method="post">
-                    <AntiforgeryToken />
-                    <input type="hidden" name="ReturnUrl" value="" />
-                    <MudIconButton ButtonType="ButtonType.Submit" Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" aria-label="Se déconnecter" />
-                </form>
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true" aria-label="Compte">
+                    <ActivatorContent>
+                        <span class="avatar" title="@context.User.Identity?.Name">@Initial(context.User.Identity?.Name)</span>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <div class="menu-user">@context.User.Identity?.Name</div>
+                        <MudMenuItem Href="Account/ChangePassword" ForceLoad="true" Icon="@Icons.Material.Rounded.Key">Changer le mot de passe</MudMenuItem>
+                        <form action="Account/Logout" method="post" class="menu-form">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="ReturnUrl" value="" />
+                            <button type="submit" class="menu-logout">
+                                <MudIcon Icon="@Icons.Material.Rounded.Logout" Size="Size.Small" />
+                                <span>Se déconnecter</span>
+                            </button>
+                        </form>
+                    </ChildContent>
+                </MudMenu>
             </Authorized>
         </AuthorizeView>
     </MudAppBar>
-    <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Responsive">
-        <MudNavMenu>
-            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Today">Aujourd'hui</MudNavLink>
-            <MudNavLink Href="cours" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MenuBook">Cours</MudNavLink>
-            <MudNavLink Href="notes" Icon="@Icons.Material.Filled.StickyNote2">Notes</MudNavLink>
-            <MudNavLink Href="entrainement" Icon="@Icons.Material.Outlined.Timer">Entraînement</MudNavLink>
-            <MudNavLink Href="examens" Icon="@Icons.Material.Filled.Assignment">Examens blancs</MudNavLink>
-            <MudNavLink Href="erreurs" Icon="@Icons.Material.Filled.ErrorOutline">
-                Carnet d'erreurs
-                @if (dueErrors > 0)
-                {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@dueErrors</MudChip>
-                }
+
+    <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Lg" Class="app-drawer">
+        <nav class="nav">
+            <div class="nav-group">Réviser</div>
+            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Rounded.WbSunny">Aujourd'hui</MudNavLink>
+            <MudNavLink Href="cours" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.MenuBook">Cours</MudNavLink>
+            <MudNavLink Href="notes" Icon="@Icons.Material.Rounded.EditNote">Notes</MudNavLink>
+
+            <div class="nav-group">S'entraîner</div>
+            <MudNavLink Href="entrainement" Icon="@Icons.Material.Rounded.Timer">Entraînement</MudNavLink>
+            <MudNavLink Href="examens" Icon="@Icons.Material.Rounded.Assignment">Examens blancs</MudNavLink>
+            <MudNavLink Href="erreurs" Icon="@Icons.Material.Rounded.Replay">
+                <span class="nav-label">
+                    Carnet d'erreurs
+                    @if (dueErrors > 0)
+                    {
+                        <span class="nav-badge">@dueErrors</span>
+                    }
+                </span>
             </MudNavLink>
-            <MudNavLink Href="bilan" Icon="@Icons.Material.Filled.Insights">Bilan</MudNavLink>
-            <MudDivider Class="my-2" />
-            <MudNavLink Href="admin/import" Icon="@Icons.Material.Filled.UploadFile">Import et réglages</MudNavLink>
-            <MudNavLink Href="admin/questions" Icon="@Icons.Material.Filled.QuestionAnswer">Banque de questions</MudNavLink>
-            <MudNavLink Href="Account/Manage" ForceLoad="true" Icon="@Icons.Material.Filled.Security">Compte et 2FA</MudNavLink>
-        </MudNavMenu>
+
+            <div class="nav-group">Suivre</div>
+            <MudNavLink Href="bilan" Icon="@Icons.Material.Rounded.Insights">Bilan</MudNavLink>
+
+            <div class="nav-spacer"></div>
+            <MudNavLink Href="admin/questions" Icon="@Icons.Material.Rounded.QuestionAnswer">Banque de questions</MudNavLink>
+            <MudNavLink Href="admin/import" Icon="@Icons.Material.Rounded.Tune">Réglages et imports</MudNavLink>
+        </nav>
     </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-4 px-2 px-sm-4">
-            <TwoFactorReminder />
+
+    <MudMainContent Class="app-main">
+        <div class="page">
             @Body
-        </MudContainer>
+        </div>
     </MudMainContent>
 </MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
     Une erreur est survenue.
     <a href="." class="reload">Recharger</a>
-    <span class="dismiss">🗙</span>
+    <span class="dismiss">✕</span>
 </div>
 
 @code {
+    private static readonly System.Globalization.CultureInfo Fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+    private MudThemeProvider? themeProvider;
     private bool drawerOpen = true;
     private bool dark;
     private int dueErrors;
-
-    private readonly MudTheme theme = new()
-    {
-        PaletteLight = new PaletteLight { Primary = "#2d4a7a", Secondary = "#c2410c", AppbarBackground = "#2d4a7a" },
-        PaletteDark = new PaletteDark { Primary = "#8fb3ff", Secondary = "#fb923c" },
-        LayoutProperties = new LayoutProperties { DrawerWidthLeft = "240px" },
-    };
+    private DateOnly examDate;
+    private int? daysLeft;
 
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += OnLocationChanged;
+        examDate = await Study.ExamDateAsync();
+        daysLeft = examDate.DayNumber - Clock.Today.DayNumber;
         await RefreshAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // Thème mémorisé sur l'appareil ; à défaut, celui du système.
+        var pref = await JS.InvokeAsync<string?>("pmpTheme.get");
+        dark = pref switch
+        {
+            "dark" => true,
+            "light" => false,
+            _ => themeProvider is not null && await themeProvider.GetSystemDarkModeAsync(),
+        };
+        StateHasChanged();
+    }
+
+    private async Task ToggleTheme()
+    {
+        dark = !dark;
+        await JS.InvokeVoidAsync("pmpTheme.set", dark ? "dark" : "light");
     }
 
     private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -88,6 +138,8 @@
     }
 
     private async Task RefreshAsync() => dueErrors = await Errors.CountDueAsync();
+
+    private static string Initial(string? name) => string.IsNullOrEmpty(name) ? "?" : char.ToUpperInvariant(name[0]).ToString();
 
     public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

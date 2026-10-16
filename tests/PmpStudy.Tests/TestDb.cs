@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using PmpStudy.Web.Data;
+using PmpStudy.Web.Model;
 using PmpStudy.Web.Model.Entities;
 using PmpStudy.Web.Model.Rules;
 using PmpStudy.Web.Services;
@@ -28,16 +29,43 @@ public sealed class TestDb : IDbContextFactory<AppDbContext>, IAsyncDisposable
     public static async Task<TestDb> CreateAsync(bool seedQuestions = true)
     {
         var db = new TestDb();
+        await new DataSeeder(db).SeedAsync(); // migrations + tâches ECO, comme au démarrage de l'app
         if (seedQuestions)
-            await new DataSeeder(db, db.Content, NullLogger<DataSeeder>.Instance).SeedAsync();
-        else
         {
-            await using var ctx = db.CreateDbContext();
-            await ctx.Database.MigrateAsync();
-            ctx.EcoTasks.AddRange(EcoCatalog.Tasks.Select(t => new EcoTask { Code = t.Code, Domain = t.Domain, Title = t.Title }));
-            await ctx.SaveChangesAsync();
+            var result = await db.Content.ImportQuestionsAsync(SyntheticBank());
+            if (!result.Ok) throw new InvalidOperationException(string.Join("; ", result.Errors));
         }
         return db;
+    }
+
+    /// <summary>Banque synthétique : 3 questions par tâche ECO (78), approches variées, quelques choix multiples.</summary>
+    public static List<QuestionImport> SyntheticBank()
+    {
+        var approaches = new[] { "predictive", "agile", "hybrid" };
+        var list = new List<QuestionImport>();
+        foreach (var task in EcoCatalog.Tasks)
+            for (var i = 0; i < 3; i++)
+            {
+                var multiple = i == 2 && task.Code.EndsWith('1');
+                list.Add(new QuestionImport
+                {
+                    Id = $"t-{task.Code}-{i}",
+                    Type = multiple ? "multiple" : "single",
+                    EcoTask = task.Code,
+                    Approach = approaches[i],
+                    Stem = $"Question {i + 1} sur {task.Title} ?",
+                    Options =
+                    [
+                        new() { Text = "Bonne réponse", Correct = true },
+                        new() { Text = "Distracteur 1", Correct = multiple },
+                        new() { Text = "Distracteur 2" },
+                        new() { Text = "Distracteur 3" },
+                    ],
+                    Explanation = "Explication de test.",
+                    Source = "Banque de test",
+                });
+            }
+        return list;
     }
 
     public AppDbContext CreateDbContext() => new SqliteAppDbContext(options);

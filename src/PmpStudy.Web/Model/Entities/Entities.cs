@@ -212,3 +212,14 @@ public class PushDevice
     public DateTime CreatedUtc { get; set; }
     public DateTime? LastSuccessUtc { get; set; }
 }
+
+/// <summary>Fichier stocké en base (PDF du cours), pour ne rien écrire sur le disque de l'hébergement.</summary>
+public class CourseFile
+{
+    public int Id { get; set; }
+    public string Kind { get; set; } = "";
+    public string ContentType { get; set; } = "application/pdf";
+    public long Length { get; set; }
+    public byte[] Content { get; set; } = [];
+    public DateTime UploadedUtc { get; set; }
+}

@@ -1,163 +1,95 @@
-﻿@page "/Account/Register"
-
+@page "/Account/Register"
 @using System.ComponentModel.DataAnnotations
-@using System.Text
-@using System.Text.Encodings.Web
-@using Microsoft.AspNetCore.Identity
-@using Microsoft.AspNetCore.WebUtilities
-@using PmpStudy.Web.Data
-
 @inject UserManager<ApplicationUser> UserManager
-@inject IUserStore<ApplicationUser> UserStore
 @inject SignInManager<ApplicationUser> SignInManager
-@inject IEmailSender<ApplicationUser> EmailSender
-@inject ILogger<Register> Logger
-@inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Créer le compte</PageTitle>
+<PageTitle>Créer le compte · PMP Study</PageTitle>
 
-<h1>Créer le compte</h1>
-
-@if (registrationClosed)
+@if (closed)
 {
-    <div class="alert alert-info">L'application est personnelle : un compte existe déjà. <a href="Account/Login">Se connecter</a></div>
+    <h1 class="auth-title">Compte déjà créé</h1>
+    <p class="auth-lead">L'application est personnelle : un seul compte est possible.</p>
+    <a class="btn-primary" href="Account/Login">Aller à la connexion</a>
     return;
 }
 
-<div class="row">
-    <div class="col-lg-6">
-        <StatusMessage Message="@Message" />
-        <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
-            <DataAnnotationsValidator />
-            <h2>Create a new account.</h2>
-            <hr />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                <label for="Input.Email">Email</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.Password">Password</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.ConfirmPassword">Confirm Password</label>
-                <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
-        </EditForm>
+<h1 class="auth-title">Créer ton compte</h1>
+<p class="auth-lead">Premier démarrage : ce compte sera le seul de l'application.</p>
+
+<FormError Message="@error" />
+
+<EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register" class="auth-form">
+    <DataAnnotationsValidator />
+    <div class="field">
+        <label for="email">Adresse e-mail</label>
+        <InputText id="email" @bind-Value="Input.Email" autocomplete="username" aria-required="true" />
+        <ValidationMessage For="() => Input.Email" class="field-error" />
     </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to register.</h3>
-            <hr />
-            <ExternalLoginPicker />
-        </section>
+    <div class="field">
+        <label for="password">Mot de passe</label>
+        <InputText id="password" type="password" @bind-Value="Input.Password" autocomplete="new-password" aria-required="true" />
+        <span class="field-help">10 caractères minimum, avec majuscule, minuscule, chiffre et symbole.</span>
+        <ValidationMessage For="() => Input.Password" class="field-error" />
     </div>
-</div>
+    <div class="field">
+        <label for="confirm">Confirmation</label>
+        <InputText id="confirm" type="password" @bind-Value="Input.ConfirmPassword" autocomplete="new-password" aria-required="true" />
+        <ValidationMessage For="() => Input.ConfirmPassword" class="field-error" />
+    </div>
+    <button type="submit" class="btn-primary">Créer le compte</button>
+</EditForm>
 
 @code {
-    private IEnumerable<IdentityError>? identityErrors;
+    private bool closed;
+    private string? error;
 
-    [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = default!;
-
-    [SupplyParameterFromQuery]
-    private string? ReturnUrl { get; set; }
-
-    private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
-
-    private bool registrationClosed;
+    [SupplyParameterFromForm] private InputModel Input { get; set; } = default!;
 
     protected override void OnInitialized()
     {
         Input ??= new();
-        // Un seul compte : l'inscription se ferme dès que le premier utilisateur existe.
-        registrationClosed = UserManager.Users.Any();
+        closed = UserManager.Users.Any();
     }
 
-    public async Task RegisterUser(EditContext editContext)
+    public async Task RegisterUser()
     {
-        if (registrationClosed) return;
-        var user = CreateUser();
-
-        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
-        var emailStore = GetEmailStore();
-        await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
+        if (closed) return;
+        var user = new ApplicationUser { UserName = Input.Email, Email = Input.Email, EmailConfirmed = true };
         var result = await UserManager.CreateAsync(user, Input.Password);
-
         if (!result.Succeeded)
         {
-            identityErrors = result.Errors;
+            error = string.Join(" ", result.Errors.Select(e => Translate(e)));
             return;
         }
-
-        Logger.LogInformation("User created a new account with password.");
-
-        var userId = await UserManager.GetUserIdAsync(user);
-        var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
-        code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-        var callbackUrl = NavigationManager.GetUriWithQueryParameters(
-            NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
-            new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code, ["returnUrl"] = ReturnUrl });
-
-        await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
-
-        if (UserManager.Options.SignIn.RequireConfirmedAccount)
-        {
-            RedirectManager.RedirectTo(
-                "Account/RegisterConfirmation",
-                new() { ["email"] = Input.Email, ["returnUrl"] = ReturnUrl });
-        }
-        else
-        {
-            await SignInManager.SignInAsync(user, isPersistent: false);
-            RedirectManager.RedirectTo(ReturnUrl);
-        }
+        await SignInManager.SignInAsync(user, isPersistent: true);
+        RedirectManager.RedirectTo("");
     }
 
-    private ApplicationUser CreateUser()
+    private static string Translate(IdentityError e) => e.Code switch
     {
-        try
-        {
-            return Activator.CreateInstance<ApplicationUser>();
-        }
-        catch
-        {
-            throw new InvalidOperationException($"Can't create an instance of '{nameof(ApplicationUser)}'. " +
-                $"Ensure that '{nameof(ApplicationUser)}' is not an abstract class and has a parameterless constructor.");
-        }
-    }
-
-    private IUserEmailStore<ApplicationUser> GetEmailStore()
-    {
-        if (!UserManager.SupportsUserEmail)
-        {
-            throw new NotSupportedException("The default UI requires a user store with email support.");
-        }
-        return (IUserEmailStore<ApplicationUser>)UserStore;
-    }
+        "PasswordTooShort" => "Mot de passe trop court.",
+        "PasswordRequiresNonAlphanumeric" => "Ajoute au moins un symbole.",
+        "PasswordRequiresDigit" => "Ajoute au moins un chiffre.",
+        "PasswordRequiresUpper" => "Ajoute au moins une majuscule.",
+        "PasswordRequiresLower" => "Ajoute au moins une minuscule.",
+        "DuplicateUserName" or "DuplicateEmail" => "Ce compte existe déjà.",
+        _ => e.Description,
+    };
 
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
-        [Display(Name = "Email")]
+        [Required(ErrorMessage = "Saisis ton adresse e-mail.")]
+        [EmailAddress(ErrorMessage = "Adresse e-mail invalide.")]
         public string Email { get; set; } = "";
 
-        [Required]
-        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [Required(ErrorMessage = "Choisis un mot de passe.")]
+        [StringLength(100, MinimumLength = 10, ErrorMessage = "10 caractères minimum.")]
         [DataType(DataType.Password)]
-        [Display(Name = "Password")]
         public string Password { get; set; } = "";
 
         [DataType(DataType.Password)]
-        [Display(Name = "Confirm password")]
-        [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
+        [Compare(nameof(Password), ErrorMessage = "Les deux mots de passe ne correspondent pas.")]
         public string ConfirmPassword { get; set; } = "";
     }
 }

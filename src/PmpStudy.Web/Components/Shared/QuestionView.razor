@@ -53,7 +53,7 @@
         </MudPaper>
     }
     <MudText Typo="Typo.caption" Class="mt-2 d-block">
-        @if (Question.EcoTask is not null) { <span>@Question.EcoTask.Code — @Question.EcoTask.Title · </span> }
+        @if (Question.EcoTask is not null) { <span>@Question.EcoTask.Code · @Question.EcoTask.Title · </span> }
         @Scoring.Label(Question.Approach) · source : @Question.Source
     </MudText>
 }

@@ -5,7 +5,7 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>Entraînement — PMP Study</PageTitle>
+<PageTitle>Entraînement · PMP Study</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-4">Entraînement chronométré</MudText>
 
@@ -23,7 +23,7 @@
                        Label="Tâches ECO" Clearable="true" Margin="Margin.Dense" Class="mt-2" MultiSelectionTextFunc="@(list => string.Join(", ", list))">
                 @foreach (var t in ecoTasks.Where(t => request.Domain is null || t.Domain == request.Domain))
                 {
-                    <MudSelectItem T="string" Value="t.Code">@t.Code — @t.Title</MudSelectItem>
+                    <MudSelectItem T="string" Value="t.Code">@t.Code · @t.Title</MudSelectItem>
                 }
             </MudSelect>
             <MudSelect T="Approach?" Value="request.Approach" ValueChanged="v => { request.Approach = v; return Recount(); }" Label="Approche" Clearable="true" Margin="Margin.Dense" Class="mt-2">

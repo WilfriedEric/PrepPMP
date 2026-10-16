@@ -54,7 +54,7 @@ public class SessionService(IDbContextFactory<AppDbContext> dbFactory, IStudyClo
             .Select(c => c.Id)
             .ToList();
 
-        var title = $"Entraînement — {ids.Count} questions";
+        var title = $"Entraînement · {ids.Count} questions";
         var session = NewSession(SessionType.Training, request.FeedbackMode, ids.Count * request.SecondsPerQuestion,
             JsonSerializer.Serialize(request, FilterJson), title);
         AddItems(session, ids, sectionSize: int.MaxValue);
@@ -105,7 +105,7 @@ public class SessionService(IDbContextFactory<AppDbContext> dbFactory, IStudyClo
 
         ids = ids.OrderBy(_ => Random.Shared.Next()).ToList();
         var session = NewSession(SessionType.ErrorReplay, FeedbackMode.Immediate, ids.Count * SessionClock.DefaultSecondsPerQuestion,
-            JsonSerializer.Serialize(new { dueOnly, max }, FilterJson), $"Rejeu d'erreurs — {ids.Count} questions");
+            JsonSerializer.Serialize(new { dueOnly, max }, FilterJson), $"Rejeu d'erreurs · {ids.Count} questions");
         AddItems(session, ids, sectionSize: int.MaxValue);
         db.Sessions.Add(session);
         await db.SaveChangesAsync(ct);

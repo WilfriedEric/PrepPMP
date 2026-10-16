@@ -8,9 +8,9 @@
 @inject ISnackbar Snackbar
 @inject ILogger<AdminImport> Logger
 
-<PageTitle>Import et réglages — PMP Study</PageTitle>
+<PageTitle>Réglages et imports · PMP Study</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4">Import et réglages</MudText>
+<MudText Typo="Typo.h4" Class="mb-4">Réglages et imports</MudText>
 
 <MudGrid>
     @* ---------- PDF ---------- *@
@@ -18,12 +18,12 @@
         <MudPaper Elevation="1" Class="pa-4 h-100">
             <MudText Typo="Typo.h6">1. PDF du PMBOK 8</MudText>
             <MudText Typo="Typo.body2" Class="my-2">
-                Stocké en privé (disque du serveur ou conteneur Blob privé) et servi uniquement après connexion, jamais par un lien public.
+                Stocké dans la base de données et servi uniquement après connexion, jamais par un lien public.
             </MudText>
             @if (pdfLength is { } len)
             {
                 <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">
-                    PDF chargé : @(settings.GetValueOrDefault(SettingKeys.PdfFileName) ?? "pmbok.pdf") — @(len / 1024 / 1024) Mo
+                    PDF chargé : @(settings.GetValueOrDefault(SettingKeys.PdfFileName) ?? "pmbok.pdf") · @(len / 1024 / 1024) Mo
                     @if (settings.GetValueOrDefault(SettingKeys.PdfPageCount) is { } pc) { <span>, @pc pages</span> }
                 </MudAlert>
             }
@@ -50,7 +50,7 @@
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ApplyExtracted">Remplacer les chapitres par ces signets</MudButton>
             }
             <MudText Typo="Typo.body2" Class="mt-3">Ou importer une liste JSON <code>[{"code":"2.3","title":"…","startPage":45,"endPage":52,"parent":"2"}]</code> :</MudText>
-            <MudTextField @bind-Value="chaptersJson" Immediate="true" Lines="3" Variant="Variant.Outlined" Placeholder="Coller le JSON des chapitres" Class="mt-1" />
+            <MudTextField @bind-Value="chaptersJson" Immediate="true" DebounceInterval="400" Lines="3" Variant="Variant.Outlined" Placeholder="Coller le JSON des chapitres" Class="mt-1" />
             <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="ImportChapters" Disabled="@string.IsNullOrWhiteSpace(chaptersJson)">Importer les chapitres</MudButton>
         </MudPaper>
     </MudItem>
@@ -68,7 +68,7 @@
                 </MudFileUpload>
                 <MudButton Variant="Variant.Text" OnClick="DownloadPlanSample">Modèle</MudButton>
             </MudStack>
-            <MudTextField @bind-Value="planJson" Immediate="true" Lines="8" Variant="Variant.Outlined" Class="mt-2" Placeholder="@PlanSample" />
+            <MudTextField @bind-Value="planJson" Immediate="true" DebounceInterval="400" Lines="8" Variant="Variant.Outlined" Class="mt-2" Placeholder="@PlanSample" />
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportPlan" Disabled="@string.IsNullOrWhiteSpace(planJson)">Importer le plan</MudButton>
         </MudPaper>
     </MudItem>
@@ -84,7 +84,7 @@
             <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="f => ReadInto(f, v => questionsJson = v)">
                 <ActivatorContent><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen">Ouvrir un fichier</MudButton></ActivatorContent>
             </MudFileUpload>
-            <MudTextField @bind-Value="questionsJson" Immediate="true" Lines="8" Variant="Variant.Outlined" Class="mt-2" Placeholder="@QuestionsPlaceholder" />
+            <MudTextField @bind-Value="questionsJson" Immediate="true" DebounceInterval="400" Lines="8" Variant="Variant.Outlined" Class="mt-2" Placeholder="@QuestionsPlaceholder" />
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportQuestions" Disabled="@string.IsNullOrWhiteSpace(questionsJson)">Importer les questions</MudButton>
         </MudPaper>
     </MudItem>
@@ -96,6 +96,12 @@
             <MudDatePicker Label="Date de l'examen" Date="examDate" DateChanged="d => examDate = d" DateFormat="dd/MM/yyyy" Class="mt-2" />
             <MudTextField @bind-Value="simulations" Label="Dates des simulations (AAAA-MM-JJ, séparées par des virgules)" Class="mt-2" />
             <MudNumericField @bind-Value="weeklyHours" Label="Heures de révision prévues par semaine" Min="1" Max="60" Class="mt-2" />
+            <MudSelect T="string" @bind-Value="timeZone" Label="Fuseau horaire" Class="mt-2" HelperText="Sert à définir « aujourd'hui » et l'heure du rappel.">
+                @foreach (var (id, label) in TimeZones)
+                {
+                    <MudSelectItem T="string" Value="id">@label</MudSelectItem>
+                }
+            </MudSelect>
             <MudNumericField @bind-Value="pageOffset" Label="Décalage de pages (page PDF = page imprimée + décalage)" Class="mt-2"
                              HelperText="Les pages du plan sont les pages imprimées ; le lecteur ouvre la page PDF correspondante." />
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveSettings">Enregistrer</MudButton>
@@ -139,6 +145,17 @@
     private string? simulations;
     private double weeklyHours = StudyService.DefaultWeeklyHours;
     private int pageOffset;
+    private string timeZone = TimeZoneSetting.DefaultId;
+
+    private static readonly (string Id, string Label)[] TimeZones =
+    [
+        ("Africa/Abidjan", "Abidjan, Dakar, Bamako, Ouagadougou (GMT)"),
+        ("Africa/Lagos", "Douala, Libreville, Lagos, Kinshasa (GMT+1)"),
+        ("Africa/Johannesburg", "Lubumbashi, Johannesburg (GMT+2)"),
+        ("Europe/Paris", "Paris, Bruxelles, Genève (GMT+1, heure d'été)"),
+        ("America/Toronto", "Montréal, Toronto (GMT-5, heure d'été)"),
+        ("UTC", "UTC"),
+    ];
     private bool busy;
     private ImportResult? lastResult;
     private string lastTitle = "";
@@ -164,6 +181,7 @@
         simulations = string.Join(", ", (await Study.SimulationDatesAsync()).Select(d => d.ToString("yyyy-MM-dd")));
         weeklyHours = double.TryParse(settings.GetValueOrDefault(SettingKeys.WeeklyHoursTarget), NumberStyles.Float, CultureInfo.InvariantCulture, out var w) ? w : StudyService.DefaultWeeklyHours;
         pageOffset = await Study.PageOffsetAsync();
+        timeZone = settings.GetValueOrDefault(SettingKeys.TimeZone) ?? TimeZoneSetting.DefaultId;
     }
 
     private async Task UploadPdf(IBrowserFile? file)
@@ -257,6 +275,7 @@
         await Study.SetSettingAsync(SettingKeys.SimulationDates, simulations ?? "");
         await Study.SetSettingAsync(SettingKeys.WeeklyHoursTarget, weeklyHours.ToString(CultureInfo.InvariantCulture));
         await Study.SetSettingAsync(SettingKeys.PageOffset, pageOffset.ToString(CultureInfo.InvariantCulture));
+        await Study.SetSettingAsync(SettingKeys.TimeZone, timeZone);
         Snackbar.Add("Réglages enregistrés", Severity.Success);
         await Refresh();
     }

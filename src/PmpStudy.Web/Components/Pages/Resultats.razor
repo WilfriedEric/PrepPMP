@@ -6,7 +6,7 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>Résultats — @session?.Title</PageTitle>
+<PageTitle>Résultats · @session?.Title</PageTitle>
 
 @if (session is null)
 {
@@ -73,7 +73,7 @@
         @if (entries.TryGetValue(it.QuestionId, out var entry))
         {
             <MudPaper Outlined="true" Class="pa-3 mt-3 error-entry">
-                <MudText Typo="Typo.subtitle2">Carnet d'erreurs @(entry.IsIncomplete ? "— incomplet" : "")</MudText>
+                <MudText Typo="Typo.subtitle2">Carnet d'erreurs @(entry.IsIncomplete ? "· à compléter" : "")</MudText>
                 <MudGrid Spacing="2">
                     <MudItem xs="12" md="4"><MudTextField @bind-Value="entry.Why" Label="Pourquoi je me suis trompé" Lines="2" AutoGrow="true" Margin="Margin.Dense" /></MudItem>
                     <MudItem xs="12" md="4"><MudTextField @bind-Value="entry.Trap" Label="Le piège" Lines="2" AutoGrow="true" Margin="Margin.Dense" /></MudItem>

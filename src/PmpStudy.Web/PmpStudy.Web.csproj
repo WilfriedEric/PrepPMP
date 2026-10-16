@@ -14,26 +14,21 @@
     <PackageReference Include="MudBlazor" Version="8.15.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.2.0" />
 
-    <!-- Données : EF Core (SQLite en local, SQL Server en production) et Identity -->
+    <!-- Données : EF Core (SQL Server en production, SQLite en développement) et Identity -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.12" PrivateAssets="all" />
 
-    <!-- Services : stockage du PDF, lecture du PDF, notifications -->
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.30.1" />
+    <!-- Services : lecture du PDF, notifications -->
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="Lib.Net.Http.WebPush" Version="3.3.1" />
 
     <!-- Correctif de sécurité d'une dépendance transitive (SqlClient) -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Banque de questions chargée au premier démarrage -->
-    <EmbeddedResource Include="Data\Seed\*.json" />
   </ItemGroup>
 
 </Project>

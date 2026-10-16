@@ -9,7 +9,7 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>Cours — p. @current</PageTitle>
+<PageTitle>Cours · p. @current</PageTitle>
 
 @if (hasPdf == false)
 {
@@ -47,7 +47,7 @@
             @if (chapter is not null || offset != 0)
             {
                 <MudText Typo="Typo.caption" Class="ml-2">
-                    @if (chapter is not null) { <span>@chapter.Code — @chapter.Title</span> }
+                    @if (chapter is not null) { <span>@chapter.Code · @chapter.Title</span> }
                     @if (offset != 0) { <span> · page imprimée @(current - offset)</span> }
                 </MudText>
             }
@@ -68,14 +68,14 @@
             @if (editing is not null)
             {
                 <MudPaper Outlined="true" Class="pa-3 my-3">
-                    <MudText Typo="Typo.subtitle2">@(editing.Id == 0 ? "Nouvelle note" : "Modifier la note") — p. @editing.Page</MudText>
+                    <MudText Typo="Typo.subtitle2">@(editing.Id == 0 ? "Nouvelle note" : "Modifier la note") · p. @editing.Page</MudText>
                     <MudTextField @bind-Value="editing.Content" Lines="6" AutoGrow="true" MaxLines="18" Variant="Variant.Outlined"
                                   Placeholder="Markdown : **gras**, listes, tableaux…" Class="mt-2" Immediate="true" />
                     <MudTextField @bind-Value="editing.Tags" Label="Étiquettes (séparées par des virgules)" Margin="Margin.Dense" Class="mt-2" />
                     <MudSelect T="int?" @bind-Value="editing.EcoTaskId" Label="Tâche ECO" Clearable="true" Margin="Margin.Dense" Class="mt-2">
                         @foreach (var t in ecoTasks)
                         {
-                            <MudSelectItem T="int?" Value="t.Id">@t.Code — @t.Title</MudSelectItem>
+                            <MudSelectItem T="int?" Value="t.Id">@t.Code · @t.Title</MudSelectItem>
                         }
                     </MudSelect>
                     <MudStack Row="true" Class="mt-3">

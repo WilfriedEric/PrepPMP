@@ -3,7 +3,7 @@
 @inject ContentService Content
 @inject IJSRuntime JS
 
-<PageTitle>Notes — PMP Study</PageTitle>
+<PageTitle>Notes · PMP Study</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
     <MudText Typo="Typo.h4">Notes</MudText>
@@ -29,7 +29,7 @@
             <MudSelect T="int?" Value="query.EcoTaskId" ValueChanged="v => { query.EcoTaskId = v; return Load(); }" Label="Tâche ECO" Clearable="true" Margin="Margin.Dense">
                 @foreach (var t in ecoTasks)
                 {
-                    <MudSelectItem T="int?" Value="t.Id">@t.Code — @t.Title</MudSelectItem>
+                    <MudSelectItem T="int?" Value="t.Id">@t.Code · @t.Title</MudSelectItem>
                 }
             </MudSelect>
         </MudItem>

@@ -4,7 +4,7 @@
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
-<PageTitle>Bilan — PMP Study</PageTitle>
+<PageTitle>Bilan · PMP Study</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-4">Bilan</MudText>
 
@@ -62,7 +62,7 @@
                                 @foreach (var d in Enum.GetValues<Domain>())
                                 {
                                     var line = e.ByDomain.FirstOrDefault(l => l.Key == d.ToString());
-                                    <td class="num">@(line is null ? "—" : $"{line.Percent:0} %")</td>
+                                    <td class="num">@(line is null ? "-" : $"{line.Percent:0} %")</td>
                                 }
                             </tr>
                         }

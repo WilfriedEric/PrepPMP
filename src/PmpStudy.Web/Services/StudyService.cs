@@ -24,6 +24,8 @@ public static class SettingKeys
     public const string ReminderLastSent = "ReminderLastSent";
     public const string VapidPublicKey = "VapidPublicKey";
     public const string VapidPrivateKey = "VapidPrivateKey";
+    /// <summary>Fuseau horaire IANA ou Windows (par défaut Africa/Abidjan).</summary>
+    public const string TimeZone = "TimeZone";
 }
 
 public record PageRange(int From, int To);
@@ -49,7 +51,7 @@ public class TodaySummary
     public StudySession? OpenSession { get; init; }
 }
 
-public class StudyService(IDbContextFactory<AppDbContext> dbFactory, IStudyClock clock)
+public class StudyService(IDbContextFactory<AppDbContext> dbFactory, IStudyClock clock, TimeZoneSetting? timeZone = null)
 {
     public static readonly DateOnly DefaultExamDate = new(2026, 12, 18);
     public const string DefaultSimulations = "2026-11-28";
@@ -77,6 +79,7 @@ public class StudyService(IDbContextFactory<AppDbContext> dbFactory, IStudyClock
         else if (setting is null) db.Settings.Add(new AppSetting { Key = key, Value = value });
         else setting.Value = value;
         await db.SaveChangesAsync(ct);
+        if (key == SettingKeys.TimeZone) timeZone?.Invalidate();
     }
 
     public async Task<DateOnly> ExamDateAsync(CancellationToken ct = default) =>

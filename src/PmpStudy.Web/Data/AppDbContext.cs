@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PmpStudy.Web.Model.Entities;
@@ -13,7 +14,7 @@ public class ApplicationUser : IdentityUser
 /// Contexte commun. Deux sous-classes portent chacune leurs migrations :
 /// <see cref="SqliteAppDbContext"/> en local et <see cref="SqlServerAppDbContext"/> pour Azure SQL.
 /// </summary>
-public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext<ApplicationUser>(options)
+public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
 {
     public DbSet<Chapter> Chapters => Set<Chapter>();
     public DbSet<EcoTask> EcoTasks => Set<EcoTask>();
@@ -29,6 +30,9 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
     public DbSet<ErrorEntry> ErrorEntries => Set<ErrorEntry>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
+    public DbSet<CourseFile> CourseFiles => Set<CourseFile>();
+    /// <summary>Clés de chiffrement des cookies de connexion, gardées en base pour survivre aux redémarrages de l'hébergement.</summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -127,6 +131,13 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
             e.Property(x => x.P256dh).HasMaxLength(200);
             e.Property(x => x.Auth).HasMaxLength(100);
             e.Property(x => x.UserAgent).HasMaxLength(400);
+        });
+
+        builder.Entity<CourseFile>(e =>
+        {
+            e.HasIndex(x => x.Kind).IsUnique();
+            e.Property(x => x.Kind).HasMaxLength(50);
+            e.Property(x => x.ContentType).HasMaxLength(100);
         });
 
         builder.Entity<AppSetting>(e =>

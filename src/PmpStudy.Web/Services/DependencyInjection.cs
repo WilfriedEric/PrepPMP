@@ -1,4 +1,4 @@
-using Azure.Storage.Blobs;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,45 +14,43 @@ namespace PmpStudy.Web.Services;
 public static class DependencyInjection
 {
     /// <summary>
-    /// Configuration :
-    /// <c>Database:Provider</c> = Sqlite (défaut) ou SqlServer, chaîne <c>ConnectionStrings:DefaultConnection</c> ;
-    /// <c>Storage:Provider</c> = Local (défaut, <c>Storage:LocalPath</c>) ou Blob (<c>ConnectionStrings:Blob</c>, <c>Storage:Container</c>) ;
-    /// <c>Study:TimeZone</c> = fuseau IANA de l'utilisateur.
+    /// Seule configuration hors base : <c>ConnectionStrings:DefaultConnection</c> et <c>Database:Provider</c>
+    /// (SqlServer par défaut, Sqlite pour le développement local). Tout le reste (réglages, fuseau horaire,
+    /// questions, PDF du cours, clés de notification et de session) est stocké dans la base.
     /// </summary>
     public static IServiceCollection AddPmpStudy(this IServiceCollection services, IConfiguration config, string contentRoot)
     {
-        var connection = config.GetConnectionString("DefaultConnection") ?? "DataSource=App_Data/pmpstudy.db;Cache=Shared";
-        var provider = config["Database:Provider"] ?? "Sqlite";
-        if (provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+        var provider = config["Database:Provider"] ?? "SqlServer";
+        var connection = config.GetConnectionString("DefaultConnection");
+        if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
         {
-            services.AddDbContextFactory<SqlServerAppDbContext>(o => o.UseSqlServer(connection, sql => sql.EnableRetryOnFailure()));
-            services.AddSingleton<IDbContextFactory<AppDbContext>, AppDbContextFactory<SqlServerAppDbContext>>();
-        }
-        else
-        {
+            connection ??= "DataSource=App_Data/pmpstudy.db;Cache=Shared";
             EnsureSqliteFolder(connection, contentRoot);
             services.AddDbContextFactory<SqliteAppDbContext>(o => o.UseSqlite(connection));
             services.AddSingleton<IDbContextFactory<AppDbContext>, AppDbContextFactory<SqliteAppDbContext>>();
         }
-        // Contexte « scoped » pour ASP.NET Core Identity.
-        services.AddScoped<AppDbContext>(sp => sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
-
-        var zoneId = config["Study:TimeZone"] ?? "Africa/Abidjan";
-        var zone = TimeZoneInfo.TryFindSystemTimeZoneById(zoneId, out var z) ? z : TimeZoneInfo.Utc;
-        services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<IStudyClock>(sp => new StudyClock(sp.GetRequiredService<TimeProvider>(), zone));
-
-        if ((config["Storage:Provider"] ?? "Local").Equals("Blob", StringComparison.OrdinalIgnoreCase))
-        {
-            var blobConnection = config.GetConnectionString("Blob") ?? throw new InvalidOperationException("ConnectionStrings:Blob manquante.");
-            var container = new BlobContainerClient(blobConnection, config["Storage:Container"] ?? "course");
-            services.AddSingleton<IPdfStore>(new BlobPdfStore(container, config["Storage:BlobName"] ?? "pmbok.pdf"));
-        }
         else
         {
-            var path = config["Storage:LocalPath"] ?? "App_Data/course/pmbok.pdf";
-            services.AddSingleton<IPdfStore>(new LocalPdfStore(Path.IsPathRooted(path) ? path : Path.Combine(contentRoot, path)));
+            if (string.IsNullOrWhiteSpace(connection))
+                throw new InvalidOperationException("ConnectionStrings:DefaultConnection manquante : renseigne la chaîne de connexion SQL Server (voir README, hébergement).");
+            services.AddDbContextFactory<SqlServerAppDbContext>(o => o.UseSqlServer(connection, sql => sql.EnableRetryOnFailure()));
+            services.AddSingleton<IDbContextFactory<AppDbContext>, AppDbContextFactory<SqlServerAppDbContext>>();
         }
+        // Contexte « scoped » pour ASP.NET Core Identity et la persistance des clés de session.
+        services.AddScoped<AppDbContext>(sp => sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
+        services.AddDataProtection()
+            .SetApplicationName("PmpStudy")
+            .PersistKeysToDbContext<AppDbContext>();
+
+        services.AddMemoryCache();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<TimeZoneSetting>();
+        services.AddSingleton<IStudyClock>(sp =>
+        {
+            var zone = sp.GetRequiredService<TimeZoneSetting>();
+            return new StudyClock(sp.GetRequiredService<TimeProvider>(), () => zone.Current);
+        });
+        services.AddSingleton<IPdfStore, DbPdfStore>();
 
         services.AddScoped<SessionService>();
         services.AddScoped<ErrorLogService>();
@@ -100,35 +98,16 @@ public class ExpiredSessionCloser(IServiceScopeFactory scopes, ILogger<ExpiredSe
     }
 }
 
-/// <summary>Applique les migrations, crée les tâches ECO et charge la banque de questions fournie avec l'app.</summary>
-public class DataSeeder(IDbContextFactory<AppDbContext> dbFactory, ContentService content, ILogger<DataSeeder> logger)
+/// <summary>Applique les migrations et crée les tâches ECO. Les questions s'importent depuis l'écran Import.</summary>
+public class DataSeeder(IDbContextFactory<AppDbContext> dbFactory)
 {
     public async Task SeedAsync(CancellationToken ct = default)
     {
-        await using (var db = await dbFactory.CreateDbContextAsync(ct))
-        {
-            await db.Database.MigrateAsync(ct);
-            var existing = await db.EcoTasks.Select(t => t.Code).ToListAsync(ct);
-            foreach (var task in EcoCatalog.Tasks.Where(t => !existing.Contains(t.Code)))
-                db.EcoTasks.Add(new() { Code = task.Code, Domain = task.Domain, Title = task.Title });
-            await db.SaveChangesAsync(ct);
-        }
-
-        // Questions embarquées : on n'ajoute que celles qui manquent, sans écraser des corrections faites dans l'app.
-        var assembly = typeof(DataSeeder).Assembly;
-        foreach (var name in assembly.GetManifestResourceNames().Where(n => n.Contains(".Seed.") && n.EndsWith(".json")).Order())
-        {
-            await using var stream = assembly.GetManifestResourceStream(name)!;
-            using var reader = new StreamReader(stream);
-            var items = ContentService.ParseQuestions(await reader.ReadToEndAsync(ct));
-            await using var db = await dbFactory.CreateDbContextAsync(ct);
-            var ids = items.Select(i => i.Id).OfType<string>().ToList();
-            var known = await db.Questions.Where(q => q.ExternalId != null && ids.Contains(q.ExternalId)).Select(q => q.ExternalId!).ToListAsync(ct);
-            var missing = items.Where(i => i.Id is null || !known.Contains(i.Id)).ToList();
-            if (missing.Count == 0) continue;
-            var result = await content.ImportQuestionsAsync(missing, ct);
-            logger.LogInformation("Banque {Name} : {Created} question(s) ajoutée(s), {Errors} avertissement(s)", name, result.Created, result.Errors.Count);
-            foreach (var error in result.Errors) logger.LogWarning("{Error}", error);
-        }
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await db.Database.MigrateAsync(ct);
+        var existing = await db.EcoTasks.Select(t => t.Code).ToListAsync(ct);
+        foreach (var task in EcoCatalog.Tasks.Where(t => !existing.Contains(t.Code)))
+            db.EcoTasks.Add(new() { Code = task.Code, Domain = task.Domain, Title = task.Title });
+        await db.SaveChangesAsync(ct);
     }
 }

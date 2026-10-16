@@ -51,3 +51,15 @@ public class DatabaseStorageTests
     [InlineData("UTC")]
     public void Time_zone_ids_resolve(string id) => Assert.NotNull(TimeZoneSetting.Resolve(id));
 }
+
+public class DatabaseProviderTests
+{
+    [Theory]
+    [InlineData("Sqlite", "Server=mssql.example.com;Database=pmp;User Id=u;Password=p;TrustServerCertificate=True", "SqlServer")]
+    [InlineData(null, "Data Source=sql5.example.net,1433;Initial Catalog=pmp;User ID=u;Password=p", "SqlServer")]
+    [InlineData("SqlServer", "DataSource=App_Data/pmpstudy.db;Cache=Shared", "Sqlite")]
+    [InlineData("Sqlite", "", "Sqlite")]
+    [InlineData(null, null, "SqlServer")]
+    public void Provider_follows_the_connection_string(string? configured, string? connection, string expected) =>
+        Assert.Equal(expected, PmpStudy.Web.Services.DatabaseProvider.Resolve(configured, connection));
+}

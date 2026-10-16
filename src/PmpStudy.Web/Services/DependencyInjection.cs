@@ -20,9 +20,9 @@ public static class DependencyInjection
     /// </summary>
     public static IServiceCollection AddPmpStudy(this IServiceCollection services, IConfiguration config, string contentRoot)
     {
-        var provider = config["Database:Provider"] ?? "SqlServer";
         var connection = config.GetConnectionString("DefaultConnection");
-        if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+        var provider = DatabaseProvider.Resolve(config["Database:Provider"], connection);
+        if (provider == DatabaseProvider.Sqlite)
         {
             connection ??= "DataSource=App_Data/pmpstudy.db;Cache=Shared";
             EnsureSqliteFolder(connection, contentRoot);
@@ -148,5 +148,36 @@ public class DataSeeder(IDbContextFactory<AppDbContext> dbFactory, ILogger<DataS
         foreach (var suffix in new[] { "-wal", "-shm" })
             if (File.Exists(file + suffix)) File.Move(file + suffix, backup + suffix);
         logger?.LogWarning("Base SQLite créée par une ancienne version : mise de côté dans {Backup}, nouvelle base créée.", backup);
+    }
+}
+
+/// <summary>
+/// Choix du moteur : la forme de la chaîne de connexion l'emporte sur le réglage <c>Database:Provider</c>, pour qu'une
+/// chaîne SQL Server ne soit jamais confiée au pilote SQLite (« keyword 'server' is not supported ») et inversement.
+/// </summary>
+public static class DatabaseProvider
+{
+    public const string SqlServer = "SqlServer";
+    public const string Sqlite = "Sqlite";
+
+    private static readonly string[] SqlServerKeys =
+        ["server", "address", "addr", "network address", "initial catalog", "database", "user id", "uid", "trusted_connection", "integrated security", "trustservercertificate", "encrypt"];
+
+    public static string Resolve(string? configured, string? connection)
+    {
+        var fallback = string.Equals(configured, Sqlite, StringComparison.OrdinalIgnoreCase) ? Sqlite : SqlServer;
+        if (string.IsNullOrWhiteSpace(connection)) return fallback;
+        var builder = new System.Data.Common.DbConnectionStringBuilder();
+        try { builder.ConnectionString = connection; }
+        catch (ArgumentException) { return fallback; }
+        if (SqlServerKeys.Any(builder.ContainsKey)) return SqlServer;
+        if (builder.TryGetValue("data source", out var source) || builder.TryGetValue("datasource", out source) || builder.TryGetValue("filename", out source))
+        {
+            var file = source?.ToString() ?? "";
+            if (file.EndsWith(".db", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".sqlite", StringComparison.OrdinalIgnoreCase)
+                || file.Contains(":memory:", StringComparison.OrdinalIgnoreCase) || builder.ContainsKey("cache") || builder.ContainsKey("mode"))
+                return Sqlite;
+        }
+        return fallback;
     }
 }

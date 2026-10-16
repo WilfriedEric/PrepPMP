@@ -33,7 +33,7 @@ public static class DependencyInjection
         {
             if (string.IsNullOrWhiteSpace(connection))
                 throw new InvalidOperationException("ConnectionStrings:DefaultConnection manquante : renseigne la chaîne de connexion SQL Server (voir README, hébergement).");
-            services.AddDbContextFactory<SqlServerAppDbContext>(o => o.UseSqlServer(connection, sql => sql.EnableRetryOnFailure()));
+            services.AddDbContextFactory<SqlServerAppDbContext>(o => o.UseSqlServer(connection, sql => sql.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null)));
             services.AddSingleton<IDbContextFactory<AppDbContext>, AppDbContextFactory<SqlServerAppDbContext>>();
         }
         // Contexte « scoped » pour ASP.NET Core Identity et la persistance des clés de session.
@@ -41,6 +41,10 @@ public static class DependencyInjection
         services.AddDataProtection()
             .SetApplicationName("PmpStudy")
             .PersistKeysToDbContext<AppDbContext>();
+        // Les clés sont lues à la première connexion, pas au démarrage : une base lente ou injoignable
+        // ne doit pas empêcher le site de répondre (IIS coupe un démarrage de plus de 2 minutes).
+        var eagerKeyRing = services.FirstOrDefault(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType?.Name == "DataProtectionHostedService");
+        if (eagerKeyRing is not null) services.Remove(eagerKeyRing);
 
         services.AddMemoryCache();
         services.AddSingleton(TimeProvider.System);
@@ -63,6 +67,9 @@ public static class DependencyInjection
         services.AddScoped<OfflineSyncService>();
         services.AddHttpClient(nameof(WebPushSender), c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddSingleton<IPushSender, WebPushSender>();
+        // La base est préparée en arrière-plan : le site répond tout de suite (IIS coupe un démarrage de plus de 2 min).
+        services.AddSingleton<StartupState>();
+        services.AddHostedService<DatabaseInitializer>();
         services.AddHostedService<ExpiredSessionCloser>();
         services.AddHostedService<DailyReminderService>();
         return services;
@@ -78,13 +85,14 @@ public static class DependencyInjection
 }
 
 /// <summary>À l'échéance, le serveur clôture la session même si le navigateur est fermé.</summary>
-public class ExpiredSessionCloser(IServiceScopeFactory scopes, ILogger<ExpiredSessionCloser> logger) : BackgroundService
+public class ExpiredSessionCloser(IServiceScopeFactory scopes, StartupState startup, ILogger<ExpiredSessionCloser> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            if (!startup.IsReady) continue;
             try
             {
                 using var scope = scopes.CreateScope();

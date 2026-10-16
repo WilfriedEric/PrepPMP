@@ -37,7 +37,7 @@ La banque de questions ne fait plus partie du code : elle s'importe depuis **Ré
 5. **Garder l'application éveillée** : sur un mutualisé, IIS arrête l'application après une vingtaine de minutes sans visite, ce qui suspend le rappel quotidien. Configurer un service de surveillance gratuit (UptimeRobot, cron-job.org…) qui appelle `https://ton-site/health` toutes les 5 minutes.
 
 En cas d'erreur au démarrage :
-- **Page « PMP Study ne démarre pas »** : l'application affiche la cause (base injoignable, identifiants SQL refusés, tables d'un essai précédent, chaîne de connexion absente) au lieu de l'erreur IIS 500.30. Corriger, puis redémarrer le site (Plesk, ou déposer et retirer `app_offline.htm`).
+- **Page « PMP Study ne démarre pas »** : le site répond tout de suite et prépare la base en arrière-plan ; si elle est injoignable ou refuse la connexion, la cause s'affiche (au lieu des erreurs IIS 500.30 / 500.37) et un nouvel essai a lieu toutes les 30 secondes. Le mode hors ligne reste disponible pendant ce temps. Attention : le nom de serveur SQL utilisé dans SSMS depuis ton ordinateur n'est pas toujours celui à mettre dans la chaîne de connexion du site (le panneau indique parfois `localhost` ou une adresse interne pour les applications hébergées).
 - **Erreur 500.30 / 502.5 sans cette page** : le programme lui-même ne se lance pas. Dans `web.config`, passer `stdoutLogEnabled="true"`, créer le dossier `logs` à la racine du site, recharger la page, puis lire le fichier `logs/stdout_*.log` (et remettre `false` ensuite).
 
 À savoir :

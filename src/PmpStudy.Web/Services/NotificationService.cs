@@ -213,13 +213,14 @@ public class NotificationService(
     }
 }
 
-public class DailyReminderService(IServiceScopeFactory scopes, ILogger<DailyReminderService> logger) : BackgroundService
+public class DailyReminderService(IServiceScopeFactory scopes, StartupState startup, ILogger<DailyReminderService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            if (!startup.IsReady) continue;
             try
             {
                 using var scope = scopes.CreateScope();

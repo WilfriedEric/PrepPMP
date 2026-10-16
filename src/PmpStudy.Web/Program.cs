@@ -62,8 +62,8 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => 
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-    await scope.ServiceProvider.GetRequiredService<DataSeeder>().SeedAsync();
+// Tant que la base n'est pas prête : page d'attente ou de diagnostic (le mode hors ligne reste servi).
+app.UseStartupGate();
 
 if (app.Environment.IsDevelopment())
 {

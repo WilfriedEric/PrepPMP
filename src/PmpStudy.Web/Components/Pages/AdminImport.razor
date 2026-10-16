@@ -81,11 +81,12 @@
                 Format du brief (tableau JSON). Avec un <code>"id"</code>, une réimportation met la question à jour au lieu de la dupliquer.
                 Types : <code>single</code>, <code>multiple</code>. Codes ECO : PE-1…PE-8, PR-1…PR-10, EA-1…EA-8.
             </MudText>
-            <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="f => ReadInto(f, v => questionsJson = v)">
-                <ActivatorContent><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen">Ouvrir un fichier</MudButton></ActivatorContent>
+            <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="ImportQuestionsFile">
+                <ActivatorContent><MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen" Disabled="busy">Importer un fichier</MudButton></ActivatorContent>
             </MudFileUpload>
-            <MudTextField @bind-Value="questionsJson" Immediate="true" DebounceInterval="400" Lines="8" Variant="Variant.Outlined" Class="mt-2" Placeholder="@QuestionsPlaceholder" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportQuestions" Disabled="@string.IsNullOrWhiteSpace(questionsJson)">Importer les questions</MudButton>
+            @* Zone non liée au circuit Blazor : un gros JSON collé part directement à l'API, sans passer par la connexion temps réel. *@
+            <textarea id="questions-json" class="json-area mt-2" rows="8" spellcheck="false" placeholder="@QuestionsPlaceholder" aria-label="JSON des questions"></textarea>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportQuestions" Disabled="busy">Importer les questions collées</MudButton>
         </MudPaper>
     </MudItem>
 
@@ -120,6 +121,10 @@
         <ReminderCard />
     </MudItem>
 
+    <MudItem xs="12" md="6">
+        <OfflineDevicesCard />
+    </MudItem>
+
     @if (lastResult is not null)
     {
         <MudItem xs="12">
@@ -140,7 +145,7 @@
     private long? pdfLength;
     private int chapterCount, planCount;
     private List<ChapterImport> extracted = [];
-    private string? chaptersJson, planJson, questionsJson;
+    private string? chaptersJson, planJson;
     private DateTime? examDate;
     private string? simulations;
     private double weeklyHours = StudyService.DefaultWeeklyHours;
@@ -249,14 +254,33 @@
         catch (JsonException ex) { Snackbar.Add($"JSON invalide : {ex.Message}", Severity.Error); }
     }
 
+    private record PostResult(int Status, string Body);
+
     private async Task ImportQuestions()
     {
+        busy = true;
         try
         {
-            Show("Questions", await Content.ImportQuestionsAsync(ContentService.ParseQuestions(questionsJson!)));
-            questionsJson = null;
+            var r = await JS.InvokeAsync<PostResult>("pmpStudy.postText", "api/questions/import", "questions-json");
+            if (r.Status == 0) Snackbar.Add("Colle d'abord le JSON des questions.", Severity.Info);
+            else if (r.Status == 200) Show("Questions", JsonSerializer.Deserialize<ImportResult>(r.Body, JsonSerializerOptions.Web)!);
+            else Snackbar.Add(r.Body.Trim('"'), Severity.Error);
+        }
+        catch (JSException ex) { Snackbar.Add($"Import impossible : {ex.Message}", Severity.Error); }
+        finally { busy = false; }
+    }
+
+    private async Task ImportQuestionsFile(IBrowserFile? file)
+    {
+        if (file is null) return;
+        busy = true;
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream(20 * 1024 * 1024));
+            Show("Questions", await Content.ImportQuestionsAsync(ContentService.ParseQuestions(await reader.ReadToEndAsync())));
         }
         catch (JsonException ex) { Snackbar.Add($"JSON invalide : {ex.Message}", Severity.Error); }
+        finally { busy = false; }
     }
 
     private async Task ReadInto(IBrowserFile? file, Action<string> set)

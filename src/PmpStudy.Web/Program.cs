@@ -87,6 +87,8 @@ app.MapAdditionalIdentityEndpoints();
 app.MapStudyApi();
 // Sonde publique pour un service de surveillance (garde l'app réveillée sur un hébergement mutualisé).
 app.MapGet("/health", () => Results.Text("ok")).AllowAnonymous();
+// Application hors ligne (fichiers statiques, mise en cache par le service worker).
+app.MapGet("/hors-ligne", () => Results.Redirect("/hors-ligne/index.html")).AllowAnonymous();
 
 app.Run();
 

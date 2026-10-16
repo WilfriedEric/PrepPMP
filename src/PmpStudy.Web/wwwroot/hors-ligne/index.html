@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PMP Study hors ligne</title>
+<meta name="description" content="Réviser le PMP sans connexion, puis synchroniser avec la version en ligne.">
+<meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0b0d" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icons/favicon-64.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/hors-ligne/hl.css">
+<script>
+  // Même thème que la version en ligne (mémorisé sur l'appareil).
+  try { const t = localStorage.getItem('pmp-theme'); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch { }
+</script>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><img src="/icons/icon-192.png" alt=""><div>PMP Study<small>Mode hors ligne</small></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="grow"></div>
+    <a class="btn ghost online-link" id="online-link" href="/">Version en ligne</a>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <span class="title" id="title">PMP Study</span>
+      <span class="spacer"></span>
+      <a class="pill accent hidden" id="pending-pill" href="#/synchro"></a>
+      <span class="pill" id="net-pill"><span class="dot"></span><span id="net-text">...</span></span>
+    </header>
+    <main class="page" id="view" tabindex="-1">
+      <div class="skeleton" style="height: 120px"></div>
+    </main>
+  </div>
+</div>
+<nav class="tabbar" id="tabbar"></nav>
+<div class="toast-zone" id="toasts" aria-live="polite"></div>
+<dialog class="modal" id="modal"></dialog>
+<noscript>JavaScript est nécessaire pour le mode hors ligne.</noscript>
+<script type="module" src="/hors-ligne/app.js"></script>
+</body>
+</html>

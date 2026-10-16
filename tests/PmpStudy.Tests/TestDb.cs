@@ -76,6 +76,7 @@ public sealed class TestDb : IDbContextFactory<AppDbContext>, IAsyncDisposable
     public StudyService Study => new(this, Clock);
     public NoteService Notes => new(this, Clock);
     public ReportService Reports => new(this, Clock, Study);
+    public OfflineSyncService Offline => new(this, Clock, Study, new TimeZoneSetting(this));
     public FakePushSender Push { get; } = new();
     public NotificationService Notifications => new(this, Clock, Push, Study, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
 

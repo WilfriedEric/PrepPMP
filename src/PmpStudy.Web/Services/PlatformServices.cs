@@ -68,7 +68,7 @@ public class TimeZoneSetting(IDbContextFactory<AppDbContext> dbFactory)
 /// </summary>
 public class DbPdfStore(IDbContextFactory<AppDbContext> dbFactory, IMemoryCache cache, IStudyClock clock) : IPdfStore
 {
-    private const string Kind = "course-pdf";
+    public const string Kind = "course-pdf";
     private const string CacheKey = "course-pdf-bytes";
 
     public async Task<bool> ExistsAsync(CancellationToken ct = default)

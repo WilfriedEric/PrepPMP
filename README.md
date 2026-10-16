@@ -78,6 +78,7 @@ Les tests sont dans `tests/PmpStudy.Tests` (projet séparé, non déployé). `de
 | Banque de questions : recherche, activation | `/admin/questions` |
 | Réglages et imports : PDF, plan, chapitres, questions, réglages, rappel quotidien, sauvegarde | `/admin/import` |
 | Mot de passe | `/Account/ChangePassword` |
+| Mode hors ligne : entraînement, carnet d'erreurs, lecture du PDF, notes, synchronisation | `/hors-ligne/` |
 
 ### Règles principales
 
@@ -110,6 +111,17 @@ Les tests sont dans `tests/PmpStudy.Tests` (projet séparé, non déployé). `de
 
 - **Installation** : menu du navigateur → « Installer l'application » ; sur iPhone : Safari → Partager → « Sur l'écran d'accueil » (iOS 16.4 ou plus pour les notifications).
 - **Rappel quotidien** : dans les réglages, choisir l'heure, puis « Activer sur cet appareil » sur chaque téléphone ou ordinateur. Web Push standard (VAPID, aes128gcm) ; clés générées au premier usage et gardées en base.
+
+## Mode hors ligne
+
+La version en ligne (Blazor Server) a besoin d'une connexion permanente. Pour réviser sans réseau, `/hors-ligne/` est une petite application autonome (HTML et JavaScript, dans `wwwroot/hors-ligne/`), gardée en cache par le service worker et accessible depuis le menu « Mode hors ligne ». Si le serveur ne répond pas, ouvrir l'application bascule automatiquement dessus.
+
+- **Préparer l'appareil** (menu Synchro, connexion requise) : télécharge les questions actives, le carnet d'erreurs, les notes, le plan et les réglages dans IndexedDB ; le PDF du cours et PDF.js peuvent être ajoutés en option.
+- **Hors ligne** : entraînement chronométré (correction immédiate ou en fin de session), rejeu des erreurs dues, analyse des erreurs, lecture du PDF avec notes par page, notes. Tout est rangé dans une boîte d'envoi.
+- **Synchronisation** (bouton, ou automatique au retour du réseau et à l'ouverture de la version en ligne) : envoi de la boîte, puis nouveau téléchargement. Le serveur recorrige les sessions (d'après le numéro des options), applique la répétition espacée à la date réelle de la session, et ne crée aucun doublon si un envoi est rejoué.
+- **Conflits** : note modifiée des deux côtés, la version hors ligne est ajoutée à côté (étiquette « conflit ») ; analyse d'erreur modifiée des deux côtés, les deux textes sont gardés ; note supprimée hors ligne mais modifiée en ligne, elle est conservée. Le journal du menu Synchro les liste.
+- Les appareils préparés apparaissent dans **Réglages et imports** (dernier envoi, dernier téléchargement).
+- API : `GET /api/offline/pack`, `POST /api/offline/sync`, `GET /api/offline/ping`.
 
 ## Évolution du schéma
 

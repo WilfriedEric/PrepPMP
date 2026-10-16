@@ -416,6 +416,10 @@ namespace PmpStudy.Web.Data.Migrations.Sqlite
                     b.Property<int?>("ChapterId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -440,6 +444,9 @@ namespace PmpStudy.Web.Data.Migrations.Sqlite
                     b.HasKey("Id");
 
                     b.HasIndex("ChapterId");
+
+                    b.HasIndex("ClientId")
+                        .IsUnique();
 
                     b.HasIndex("EcoTaskId");
 
@@ -586,6 +593,10 @@ namespace PmpStudy.Web.Data.Migrations.Sqlite
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateOnly>("Date")
                         .HasColumnType("TEXT");
 
@@ -608,6 +619,9 @@ namespace PmpStudy.Web.Data.Migrations.Sqlite
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClientId")
+                        .IsUnique();
 
                     b.HasIndex("Date");
 
@@ -753,6 +767,10 @@ namespace PmpStudy.Web.Data.Migrations.Sqlite
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("CorrectCount")
                         .HasColumnType("INTEGER");
 
@@ -787,9 +805,49 @@ namespace PmpStudy.Web.Data.Migrations.Sqlite
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClientId")
+                        .IsUnique();
+
                     b.HasIndex("StartUtc");
 
                     b.ToTable("Sessions");
+                });
+
+            modelBuilder.Entity("PmpStudy.Web.Model.Entities.SyncDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastPullUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastPushUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique();
+
+                    b.ToTable("SyncDevices");
                 });
 
             modelBuilder.Entity("StudyPlanDayChapters", b =>

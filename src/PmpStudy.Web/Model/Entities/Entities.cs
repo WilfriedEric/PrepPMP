@@ -48,6 +48,8 @@ public class ReadingLog
     public DateTime UpdatedUtc { get; set; }
     public int? StudyPlanDayId { get; set; }
     public StudyPlanDay? StudyPlanDay { get; set; }
+    /// <summary>Identifiant attribué par le mode hors ligne : rend la synchronisation rejouable sans doublon.</summary>
+    public string? ClientId { get; set; }
 }
 
 public class Note
@@ -63,6 +65,8 @@ public class Note
     public Chapter? Chapter { get; set; }
     public int? EcoTaskId { get; set; }
     public EcoTask? EcoTask { get; set; }
+    /// <summary>Identifiant attribué par le mode hors ligne quand la note y a été créée.</summary>
+    public string? ClientId { get; set; }
 }
 
 public class Scenario
@@ -123,6 +127,8 @@ public class StudySession
     public int? CorrectCount { get; set; }
     public double? ScorePercent { get; set; }
     public string? Title { get; set; }
+    /// <summary>Identifiant attribué par le mode hors ligne : une session envoyée deux fois n'est importée qu'une fois.</summary>
+    public string? ClientId { get; set; }
     public List<SessionSection> Sections { get; set; } = [];
     public List<SessionItem> Items { get; set; } = [];
 
@@ -222,4 +228,16 @@ public class CourseFile
     public long Length { get; set; }
     public byte[] Content { get; set; } = [];
     public DateTime UploadedUtc { get; set; }
+}
+
+/// <summary>Appareil qui utilise le mode hors ligne (dernier téléchargement, dernier envoi).</summary>
+public class SyncDevice
+{
+    public int Id { get; set; }
+    public string DeviceId { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string? UserAgent { get; set; }
+    public DateTime CreatedUtc { get; set; }
+    public DateTime? LastPullUtc { get; set; }
+    public DateTime? LastPushUtc { get; set; }
 }

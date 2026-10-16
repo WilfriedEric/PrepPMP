@@ -182,6 +182,19 @@ public static class StudyApi
             return Results.Ok(new { sent, removed, failed });
         });
 
+        // ----- Mode hors ligne -----
+        api.MapGet("/offline/ping", (IStudyClock clock) => Results.Ok(new { ok = true, serverUtc = clock.UtcNow }));
+        api.MapGet("/offline/pack", async (OfflineSyncService sync, HttpContext http, string? deviceId, string? name) =>
+        {
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(await sync.BuildPackAsync(deviceId, name, http.Request.Headers.UserAgent.ToString(), http.RequestAborted));
+        });
+        api.MapPost("/offline/sync", async (OfflineSyncService sync, SyncPush push, HttpContext http) =>
+        {
+            try { return Results.Ok(await sync.ApplyAsync(push, http.Request.Headers.UserAgent.ToString(), http.RequestAborted)); }
+            catch (SyncException ex) { return Results.BadRequest(ex.Message); }
+        });
+
         api.MapGet("/export", async (ReportService reports, ContentService content, IStudyClock clock) =>
             Results.File(Encoding.UTF8.GetBytes(await reports.FullExportJsonAsync(content)), "application/json", $"pmp-study-export-{clock.Today:yyyy-MM-dd}.json"));
 

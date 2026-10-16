@@ -1,0 +1,51 @@
+@inject OfflineSyncService Offline
+@inject IStudyClock Clock
+
+<MudPaper Elevation="1" Class="pa-4 h-100">
+    <MudText Typo="Typo.h6">Mode hors ligne</MudText>
+    <MudText Typo="Typo.body2" Class="my-2">
+        Sur chaque téléphone ou ordinateur, ouvre le <a href="/hors-ligne/index.html" target="_top">mode hors ligne</a> et lance
+        « Préparer cet appareil » : questions, carnet d'erreurs, notes, plan et PDF y sont gardés. Ce qui est fait sans connexion
+        est envoyé ici à la synchronisation (automatique au retour du réseau).
+    </MudText>
+    @if (devices is null)
+    {
+        <MudSkeleton Height="60px" />
+    }
+    else if (devices.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Aucun appareil préparé pour l'instant.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Class="mt-2">
+            <thead><tr><th>Appareil</th><th>Dernier envoi</th><th>Dernier téléchargement</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var d in devices)
+                {
+                    <tr>
+                        <td>@(string.IsNullOrEmpty(d.Name) ? "Appareil" : d.Name)</td>
+                        <td>@Format(d.LastPushUtc)</td>
+                        <td>@Format(d.LastPullUtc)</td>
+                        <td><MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" aria-label="Oublier cet appareil" OnClick="() => Forget(d.Id)" /></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        <MudText Typo="Typo.caption" Class="d-block mt-1">Oublier un appareil retire seulement cette ligne : ses données locales restent sur l'appareil.</MudText>
+    }
+</MudPaper>
+
+@code {
+    private List<SyncDevice>? devices;
+
+    protected override async Task OnInitializedAsync() => devices = await Offline.DevicesAsync();
+
+    private string Format(DateTime? utc) => utc is { } u ? Clock.ToLocal(u).ToString("dd/MM HH:mm") : "-";
+
+    private async Task Forget(int id)
+    {
+        await Offline.ForgetDeviceAsync(id);
+        devices = await Offline.DevicesAsync();
+    }
+}

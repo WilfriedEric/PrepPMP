@@ -90,19 +90,30 @@
 
 #components-reconnect-modal button {
     border: 0;
-    background-color: #6b9ed2;
+    background-color: #0f766e;
     color: white;
-    padding: 4px 24px;
-    border-radius: 4px;
+    padding: 8px 24px;
+    border-radius: 10px;
+    font: inherit;
+    font-weight: 560;
+    cursor: pointer;
 }
 
     #components-reconnect-modal button:hover {
-        background-color: #3b6ea2;
+        background-color: #115e59;
     }
 
     #components-reconnect-modal button:active {
-        background-color: #6b9ed2;
+        transform: translateY(1px);
     }
+
+/* Toujours proposé : la coupure peut durer, le mode hors ligne prend le relais. */
+.components-reconnect-offline {
+    color: #0f766e;
+    font-weight: 560;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
 
 .components-rejoining-animation {
     position: relative;

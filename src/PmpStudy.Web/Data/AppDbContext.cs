@@ -31,6 +31,7 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<CourseFile> CourseFiles => Set<CourseFile>();
+    public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
     /// <summary>Clés de chiffrement des cookies de connexion, gardées en base pour survivre aux redémarrages de l'hébergement.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
@@ -64,6 +65,8 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
         builder.Entity<ReadingLog>(e =>
         {
             e.HasIndex(x => x.Date);
+            e.HasIndex(x => x.ClientId).IsUnique();
+            e.Property(x => x.ClientId).HasMaxLength(64);
             e.HasOne(x => x.StudyPlanDay).WithMany().OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -71,6 +74,8 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
         {
             e.HasIndex(x => x.Page);
             e.Property(x => x.Tags).HasMaxLength(400);
+            e.HasIndex(x => x.ClientId).IsUnique();
+            e.Property(x => x.ClientId).HasMaxLength(64);
             e.HasOne(x => x.Chapter).WithMany().OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.EcoTask).WithMany().OnDelete(DeleteBehavior.SetNull);
         });
@@ -94,6 +99,8 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
         {
             e.HasIndex(x => x.StartUtc);
             e.Property(x => x.Title).HasMaxLength(200);
+            e.HasIndex(x => x.ClientId).IsUnique();
+            e.Property(x => x.ClientId).HasMaxLength(64);
             e.HasMany(x => x.Sections).WithOne(x => x.StudySession).HasForeignKey(x => x.StudySessionId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Items).WithOne(x => x.StudySession).HasForeignKey(x => x.StudySessionId).OnDelete(DeleteBehavior.Cascade);
             e.Ignore(x => x.IsFinished);
@@ -130,6 +137,14 @@ public abstract class AppDbContext(DbContextOptions options) : IdentityDbContext
             e.HasIndex(x => x.Endpoint).IsUnique();
             e.Property(x => x.P256dh).HasMaxLength(200);
             e.Property(x => x.Auth).HasMaxLength(100);
+            e.Property(x => x.UserAgent).HasMaxLength(400);
+        });
+
+        builder.Entity<SyncDevice>(e =>
+        {
+            e.HasIndex(x => x.DeviceId).IsUnique();
+            e.Property(x => x.DeviceId).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.UserAgent).HasMaxLength(400);
         });
 

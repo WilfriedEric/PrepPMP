@@ -436,3 +436,21 @@ tr.clickable { cursor: pointer; }
     padding: 0.6rem 1.25rem 0.7rem;
 }
 #blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: 0.75rem; top: 0.5rem; }
+
+/* Message de la synchronisation hors ligne (hors arbre Blazor). */
+.offline-toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2000;
+    max-width: min(92vw, 460px); padding: 12px 16px; border-radius: 10px;
+    background: var(--app-text); color: var(--app-bg); font: 500 14px/1.45 var(--font-sans);
+    box-shadow: var(--app-shadow); animation: offline-toast-in 0.3s var(--ease);
+}
+@keyframes offline-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* Zone de collage JSON (import des questions), alignée sur les champs MudBlazor « outlined ». */
+.json-area {
+    display: block; width: 100%; min-height: 168px; resize: vertical; padding: 12px 14px; box-sizing: border-box;
+    border: 1px solid var(--mud-palette-lines-inputs); border-radius: 10px; background: transparent;
+    color: var(--mud-palette-text-primary); font: 13px/1.5 var(--font-mono);
+}
+.json-area:focus { outline: none; border-color: var(--mud-palette-primary); box-shadow: 0 0 0 3px var(--mud-palette-primary-hover); }
+.json-area::placeholder { color: var(--mud-palette-text-disabled); }

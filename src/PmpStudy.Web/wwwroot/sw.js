@@ -1,23 +1,80 @@
-// Service worker PMP Study : installation en application, page hors ligne et notifications de rappel.
-// Rien d'authentifié n'est mis en cache (API, PDF, pages) : uniquement la coque statique hors ligne.
-const CACHE = 'pmpstudy-shell-v1';
-const SHELL = ['/offline.html', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.webmanifest'];
+// Service worker PMP Study : installation en application, mode hors ligne et notifications de rappel.
+// La version en ligne (Blazor) n'est jamais mise en cache : seule l'application hors ligne (/hors-ligne/) l'est.
+// Les données hors ligne vivent dans IndexedDB ; le PDF du cours et PDF.js dans le cache « pmpstudy-data ».
+const SHELL_CACHE = 'pmpstudy-shell-v2';
+const DATA_CACHE = 'pmpstudy-data';
+const OFFLINE_APP = '/hors-ligne/index.html';
+const SHELL = [
+  OFFLINE_APP,
+  '/hors-ligne/app.js',
+  '/hors-ligne/store.js',
+  '/hors-ligne/icons.js',
+  '/hors-ligne/reader.js',
+  '/hors-ligne/hl.css',
+  '/fonts/geist-latin-wght-normal.woff2',
+  '/fonts/geist-latin-ext-wght-normal.woff2',
+  '/fonts/geist-mono-latin-wght-normal.woff2',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/favicon-64.png',
+  '/icons/apple-touch-icon.png',
+  '/manifest.webmanifest',
+];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()));
 });
 
+/** Réseau d'abord (les mises à jour arrivent tout de suite), cache si le réseau ne répond pas dans le délai. */
+async function networkFirst(request, cacheKey, timeoutMs) {
+  const cache = await caches.open(SHELL_CACHE);
+  try {
+    const response = await Promise.race([
+      fetch(request),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+    ]);
+    if (response.ok && response.type === 'basic') cache.put(cacheKey, response.clone());
+    return response;
+  } catch {
+    const cached = await caches.match(cacheKey, { ignoreSearch: true });
+    if (cached) return cached;
+    throw new Error('Hors ligne et absent du cache.');
+  }
+}
+
 self.addEventListener('fetch', (event) => {
-  // Navigation : réseau d'abord, page hors ligne si le réseau est indisponible.
-  if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request).catch(() => caches.match('/offline.html')));
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (request.mode === 'navigate') {
+    // Application hors ligne : toujours disponible. Version en ligne : réseau, sinon bascule vers le hors ligne.
+    if (url.pathname.startsWith('/hors-ligne')) {
+      event.respondWith(networkFirst(request, OFFLINE_APP, 3500).catch(() => Response.error()));
+    } else {
+      // « no-store » : jamais une ancienne page du cache HTTP du navigateur (ses scripts ne seraient pas disponibles).
+      event.respondWith(fetch(request.url, { cache: 'no-store', credentials: 'same-origin', redirect: 'manual' })
+        .catch(async () => (await caches.match(OFFLINE_APP)) || Response.error()));
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/hors-ligne/') || url.pathname.startsWith('/fonts/') || url.pathname.startsWith('/icons/')) {
+    event.respondWith(networkFirst(request, url.pathname, 3500));
+    return;
+  }
+
+  if (url.pathname.startsWith('/lib/pdfjs/')) {
+    // PDF.js : gardé avec le PDF du cours quand il a été téléchargé.
+    event.respondWith(caches.match(url.pathname, { ignoreSearch: true }).then((cached) => cached || fetch(request)));
   }
 });
 

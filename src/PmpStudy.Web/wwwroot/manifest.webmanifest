@@ -17,6 +17,7 @@
   "shortcuts": [
     { "name": "Entraînement", "url": "/entrainement", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Carnet d'erreurs", "url": "/erreurs", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Cours", "url": "/cours", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Cours", "url": "/cours", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Mode hors ligne", "url": "/hors-ligne/index.html", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

@@ -440,6 +440,10 @@ namespace PmpStudy.Web.Data.Migrations.SqlServer
                     b.Property<int?>("ChapterId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -464,6 +468,10 @@ namespace PmpStudy.Web.Data.Migrations.SqlServer
                     b.HasKey("Id");
 
                     b.HasIndex("ChapterId");
+
+                    b.HasIndex("ClientId")
+                        .IsUnique()
+                        .HasFilter("[ClientId] IS NOT NULL");
 
                     b.HasIndex("EcoTaskId");
 
@@ -619,6 +627,10 @@ namespace PmpStudy.Web.Data.Migrations.SqlServer
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
@@ -641,6 +653,10 @@ namespace PmpStudy.Web.Data.Migrations.SqlServer
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClientId")
+                        .IsUnique()
+                        .HasFilter("[ClientId] IS NOT NULL");
 
                     b.HasIndex("Date");
 
@@ -796,6 +812,10 @@ namespace PmpStudy.Web.Data.Migrations.SqlServer
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<int?>("CorrectCount")
                         .HasColumnType("int");
 
@@ -830,9 +850,52 @@ namespace PmpStudy.Web.Data.Migrations.SqlServer
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClientId")
+                        .IsUnique()
+                        .HasFilter("[ClientId] IS NOT NULL");
+
                     b.HasIndex("StartUtc");
 
                     b.ToTable("Sessions");
+                });
+
+            modelBuilder.Entity("PmpStudy.Web.Model.Entities.SyncDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("LastPullUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastPushUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique();
+
+                    b.ToTable("SyncDevices");
                 });
 
             modelBuilder.Entity("StudyPlanDayChapters", b =>

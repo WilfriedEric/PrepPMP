@@ -15,6 +15,16 @@ window.pmpStudy = {
     copy: async function (text) {
         await navigator.clipboard.writeText(text);
     },
+    // Envoie le contenu d'une zone de texte à l'API (gros imports : hors de la connexion Blazor).
+    postText: async function (url, id) {
+        const el = document.getElementById(id);
+        const text = el ? el.value : '';
+        if (!text.trim()) return { status: 0, body: '' };
+        const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: text });
+        const body = await res.text();
+        if (res.ok) el.value = '';
+        return { status: res.status, body: body };
+    },
     // Empêche de quitter l'examen par erreur.
     guardUnload: function (on) {
         window.onbeforeunload = on ? () => true : null;
@@ -79,3 +89,35 @@ window.pmpTheme = {
         try { localStorage.setItem('pmp-theme', value); } catch { /* stockage indisponible : thème non mémorisé */ }
     }
 };
+
+// ---------- Mode hors ligne : envoi des changements faits sans connexion ----------
+// Si cet appareil a déjà servi hors ligne, la version en ligne envoie ce qui attend et rafraîchit les données locales.
+window.addEventListener('load', async () => {
+    if (location.pathname.startsWith('/Account') || !('indexedDB' in window)) return;
+    try {
+        if (indexedDB.databases) {
+            const dbs = await indexedDB.databases();
+            if (!dbs.some((d) => d.name === 'pmpstudy-offline')) return;
+        }
+        const store = await import('/hors-ligne/store.js');
+        if (!(await store.hasPack())) return;
+        const run = async (reason) => {
+            const entry = await store.autoSync(reason);
+            if (entry?.ok && entry.sent) offlineToast(`Mode hors ligne : ${entry.sent} envoyé${entry.conflicts?.length ? `, ${entry.conflicts.length} conflit(s) résolu(s) sans perte` : ''}.`);
+            else if (entry && !entry.ok && !entry.offline) offlineToast(`Mode hors ligne : synchronisation impossible (${entry.error}).`);
+        };
+        await run('version en ligne');
+        window.addEventListener('online', () => run('retour du réseau'));
+    } catch (e) {
+        console.warn('Synchronisation hors ligne', e);
+    }
+});
+
+function offlineToast(text) {
+    const el = document.createElement('div');
+    el.className = 'offline-toast';
+    el.setAttribute('role', 'status');
+    el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 6000);
+}

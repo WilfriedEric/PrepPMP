@@ -24,7 +24,7 @@ La banque de questions ne fait plus partie du code : elle s'importe depuis **Ré
 
 1. **Base SQL Server** : créer la base et un utilisateur dans le panneau d'hébergement. Deux options pour les tables :
    - laisser l'application les créer au premier démarrage (l'utilisateur SQL doit avoir le droit de créer des tables, rôle `db_owner` sur sa base) ;
-   - ou exécuter `deploy/creation-base-sqlserver.sql` dans le gestionnaire SQL (script idempotent, relançable sans risque).
+   - ou exécuter `deploy/creation-base-sqlserver.sql` dans le gestionnaire SQL (script idempotent, relançable sans risque). Exécuter le fichier **en entier** (il contient des séparateurs `GO`), sur une base vide ou déjà créée par ce script.
 2. **Publier** depuis un poste de développement :
    ```bash
    dotnet publish src/PmpStudy.Web -p:PublishProfile=InterServer
@@ -118,6 +118,7 @@ dotnet tool restore
 dotnet ef migrations add <Nom> --context SqlServerAppDbContext --output-dir Data/Migrations/SqlServer
 dotnet ef migrations add <Nom> --context SqliteAppDbContext --output-dir Data/Migrations/Sqlite
 dotnet ef migrations script --idempotent --context SqlServerAppDbContext -o ../../deploy/creation-base-sqlserver.sql
+sed -i '1s/^\xEF\xBB\xBF//' ../../deploy/creation-base-sqlserver.sql   # retire le BOM, mal lu par certains outils SQL
 ```
 
 ## Tests

@@ -1,4 +1,4 @@
-﻿IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
+IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
 BEGIN
     CREATE TABLE [__EFMigrationsHistory] (
         [MigrationId] nvarchar(150) NOT NULL,
@@ -714,6 +714,92 @@ IF NOT EXISTS (
 BEGIN
     INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
     VALUES (N'20261016105511_Initial', N'10.0.12');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    ALTER TABLE [Sessions] ADD [ClientId] nvarchar(64) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    ALTER TABLE [ReadingLogs] ADD [ClientId] nvarchar(64) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    ALTER TABLE [Notes] ADD [ClientId] nvarchar(64) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    CREATE TABLE [SyncDevices] (
+        [Id] int NOT NULL IDENTITY,
+        [DeviceId] nvarchar(64) NOT NULL,
+        [Name] nvarchar(100) NOT NULL,
+        [UserAgent] nvarchar(400) NULL,
+        [CreatedUtc] datetime2 NOT NULL,
+        [LastPullUtc] datetime2 NULL,
+        [LastPushUtc] datetime2 NULL,
+        CONSTRAINT [PK_SyncDevices] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_Sessions_ClientId] ON [Sessions] ([ClientId]) WHERE [ClientId] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_ReadingLogs_ClientId] ON [ReadingLogs] ([ClientId]) WHERE [ClientId] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_Notes_ClientId] ON [Notes] ([ClientId]) WHERE [ClientId] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_SyncDevices_DeviceId] ON [SyncDevices] ([DeviceId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261016111213_OfflineSync'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261016111213_OfflineSync', N'10.0.12');
 END;
 
 COMMIT;

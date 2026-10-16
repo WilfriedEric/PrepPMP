@@ -22,9 +22,11 @@ La banque de questions ne fait plus partie du code : elle s'importe depuis **Ré
 
 ## Hébergement mutualisé InterServer (Windows, IIS, Plesk)
 
-1. **Base SQL Server** : créer la base et un utilisateur dans le panneau d'hébergement. Deux options pour les tables :
-   - laisser l'application les créer au premier démarrage (l'utilisateur SQL doit avoir le droit de créer des tables, rôle `db_owner` sur sa base) ;
-   - ou exécuter `deploy/creation-base-sqlserver.sql` dans le gestionnaire SQL (script idempotent, relançable sans risque). Exécuter le fichier **en entier** (il contient des séparateurs `GO`), sur une base vide ou déjà créée par ce script.
+1. **Base SQL Server** : créer la base et son utilisateur dans le panneau d'hébergement. Deux options pour les tables :
+   - **le plus simple** : ne rien exécuter ; l'application crée les tables au premier démarrage (l'utilisateur SQL doit être propriétaire de sa base, rôle `db_owner`, ce qui est le cas par défaut chez InterServer) ;
+   - ou exécuter `deploy/creation-base-sqlserver.sql` **en entier** sur une base **vide** (instructions simples, sans blocs conditionnels). Si un essai précédent a laissé des tables, supprimer puis recréer la base dans le panneau avant de relancer.
+
+   Les évolutions suivantes du schéma s'appliquent toutes seules au démarrage de l'application.
 2. **Publier** depuis un poste de développement :
    ```bash
    dotnet publish src/PmpStudy.Web -p:PublishProfile=InterServer
@@ -117,8 +119,9 @@ Les migrations s'appliquent au démarrage. Pour en ajouter (depuis `src/PmpStudy
 dotnet tool restore
 dotnet ef migrations add <Nom> --context SqlServerAppDbContext --output-dir Data/Migrations/SqlServer
 dotnet ef migrations add <Nom> --context SqliteAppDbContext --output-dir Data/Migrations/Sqlite
-dotnet ef migrations script --idempotent --context SqlServerAppDbContext -o ../../deploy/creation-base-sqlserver.sql
-sed -i '1s/^\xEF\xBB\xBF//' ../../deploy/creation-base-sqlserver.sql   # retire le BOM, mal lu par certains outils SQL
+# script de création complet pour une base vide (sans BOM, mal lu par certains outils SQL)
+dotnet ef migrations script --context SqlServerAppDbContext -o ../../deploy/creation-base-sqlserver.sql
+sed -i '1s/^\xEF\xBB\xBF//' ../../deploy/creation-base-sqlserver.sql
 ```
 
 ## Tests

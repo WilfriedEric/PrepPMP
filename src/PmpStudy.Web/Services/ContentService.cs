@@ -11,6 +11,9 @@ using UglyToad.PdfPig;
 
 namespace PmpStudy.Web.Services;
 
+/// <summary>Ce qui sert à filtrer une question à l'entraînement.</summary>
+public record QuestionFacet(Domain? Domain, string? EcoTask, Approach Approach, int? ChapterId, string Source);
+
 /// <summary>Banque de questions, chapitres, tâches ECO et plan de révision : lecture et imports.</summary>
 public partial class ContentService(IDbContextFactory<AppDbContext> dbFactory)
 {
@@ -53,6 +56,15 @@ public partial class ContentService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.Questions.Select(q => q.Source).Distinct().OrderBy(s => s).ToListAsync(ct);
+    }
+
+    /// <summary>Caractéristiques des questions actives, pour compter les questions de chaque filtre d'entraînement.</summary>
+    public async Task<List<QuestionFacet>> TrainingFacetsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.Questions.AsNoTracking().Where(q => q.IsActive)
+            .Select(q => new QuestionFacet(q.EcoTask != null ? (Domain?)q.EcoTask.Domain : null, q.EcoTask != null ? q.EcoTask.Code : null, q.Approach, q.ChapterId, q.Source))
+            .ToListAsync(ct);
     }
 
     public async Task<QuestionBankStats> BankStatsAsync(CancellationToken ct = default)

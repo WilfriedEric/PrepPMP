@@ -9,6 +9,27 @@
 
 <MudText Typo="Typo.h4" Class="mb-4">Entraînement chronométré</MudText>
 
+@if (facets is null)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="360px" Class="rounded-lg" />
+    return;
+}
+
+@if (facets.Count == 0)
+{
+    <section class="panel panel-accent">
+        <h2>La banque de questions est vide</h2>
+        <div class="empty">
+            <p>Aucune question n'est encore enregistrée dans la base de ce serveur : importe tes fichiers de questions (JSON) pour pouvoir t'entraîner.
+               Les sources (Test prédictif, Examen blanc, Kim, 1300…) apparaîtront ensuite dans les filtres.</p>
+            <div class="actions">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="admin/import" StartIcon="@Icons.Material.Rounded.Upload">Importer des questions</MudButton>
+            </div>
+        </div>
+    </section>
+    return;
+}
+
 <MudGrid>
     <MudItem xs="12" md="6">
         <MudPaper Elevation="1" Class="pa-4">
@@ -16,35 +37,40 @@
             <MudSelect T="Domain?" Value="request.Domain" ValueChanged="OnDomainChanged" Label="Domaine" Clearable="true" Margin="Margin.Dense">
                 @foreach (var d in Enum.GetValues<Domain>())
                 {
-                    <MudSelectItem T="Domain?" Value="d">@Scoring.Label(d)</MudSelectItem>
+                    var n = Count(domain: d);
+                    <MudSelectItem T="Domain?" Value="d" Disabled="@(n == 0)">@Scoring.Label(d) · @n</MudSelectItem>
                 }
             </MudSelect>
             <MudSelect T="string" MultiSelection="true" SelectedValues="request.EcoTasks" SelectedValuesChanged="OnTasksChanged"
                        Label="Tâches ECO" Clearable="true" Margin="Margin.Dense" Class="mt-2" MultiSelectionTextFunc="@(list => string.Join(", ", list))">
                 @foreach (var t in ecoTasks.Where(t => request.Domain is null || t.Domain == request.Domain))
                 {
-                    <MudSelectItem T="string" Value="t.Code">@t.Code · @t.Title</MudSelectItem>
+                    var n = Count(tasks: [t.Code]);
+                    <MudSelectItem T="string" Value="t.Code" Disabled="@(n == 0 && !request.EcoTasks.Contains(t.Code))">@t.Code · @t.Title · @n</MudSelectItem>
                 }
             </MudSelect>
-            <MudSelect T="Approach?" Value="request.Approach" ValueChanged="v => { request.Approach = v; return Recount(); }" Label="Approche" Clearable="true" Margin="Margin.Dense" Class="mt-2">
+            <MudSelect T="Approach?" Value="request.Approach" ValueChanged="v => { request.Approach = v; Recount(); }" Label="Approche" Clearable="true" Margin="Margin.Dense" Class="mt-2">
                 @foreach (var a in Enum.GetValues<Approach>())
                 {
-                    <MudSelectItem T="Approach?" Value="a">@Scoring.Label(a)</MudSelectItem>
+                    var n = Count(approach: a);
+                    <MudSelectItem T="Approach?" Value="a" Disabled="@(n == 0)">@Scoring.Label(a) · @n</MudSelectItem>
                 }
             </MudSelect>
+            @* Le filtre par chapitre n'apparaît que si des questions sont rattachées à des chapitres. *@
             @if (chapters.Count > 0)
             {
-                <MudSelect T="int?" Value="request.ChapterId" ValueChanged="v => { request.ChapterId = v; return Recount(); }" Label="Chapitre" Clearable="true" Margin="Margin.Dense" Class="mt-2">
+                <MudSelect T="int?" Value="request.ChapterId" ValueChanged="v => { request.ChapterId = v; Recount(); }" Label="Chapitre" Clearable="true" Margin="Margin.Dense" Class="mt-2">
                     @foreach (var c in chapters)
                     {
-                        <MudSelectItem T="int?" Value="c.Id">@c.Code @c.Title</MudSelectItem>
+                        <MudSelectItem T="int?" Value="c.Id">@c.Code @c.Title · @Count(chapter: c.Id)</MudSelectItem>
                     }
                 </MudSelect>
             }
-            <MudSelect T="string" Value="request.Source" ValueChanged="v => { request.Source = v; return Recount(); }" Label="Source" Clearable="true" Margin="Margin.Dense" Class="mt-2">
-                @foreach (var s in sources)
+            <MudSelect T="string" Value="request.Source" ValueChanged="v => { request.Source = v; Recount(); }" Label="Source" Clearable="true" Margin="Margin.Dense" Class="mt-2">
+                @foreach (var src in sources)
                 {
-                    <MudSelectItem T="string" Value="s">@s</MudSelectItem>
+                    var n = Count(source: src);
+                    <MudSelectItem T="string" Value="src" Disabled="@(n == 0)">@src · @n</MudSelectItem>
                 }
             </MudSelect>
 
@@ -64,8 +90,15 @@
             <MudCheckBox @bind-Value="request.PreferUnseen" Label="Questions jamais vues en priorité" Dense="true" />
 
             <MudText Typo="Typo.body2" Class="mt-2">
-                @matching question(s) correspondent · durée : @Countdown.Format(TimeSpan.FromSeconds(Math.Min(request.Count, matching) * request.SecondsPerQuestion))
+                @matching question(s) correspondent sur @facets.Count · durée : @Countdown.Format(TimeSpan.FromSeconds(Math.Min(request.Count, matching) * request.SecondsPerQuestion))
             </MudText>
+            @if (matching == 0 && Blocking() is { } hint)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                    Aucune question avec ces filtres. @hint.Text
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="hint.Remove">Retirer ce filtre</MudButton>
+                </MudAlert>
+            }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Start" Disabled="@(busy || matching == 0)"
                        StartIcon="@Icons.Material.Filled.PlayArrow">Commencer</MudButton>
         </MudPaper>
@@ -110,6 +143,7 @@
     private List<EcoTask> ecoTasks = [];
     private List<Chapter> chapters = [];
     private List<string> sources = [];
+    private List<QuestionFacet>? facets;
     private List<StudySession> recent = [];
     private int matching;
     private bool busy;
@@ -117,26 +151,62 @@
     protected override async Task OnInitializedAsync()
     {
         ecoTasks = await Content.EcoTasksAsync();
-        chapters = await Content.ChaptersAsync();
-        sources = await Content.SourcesAsync();
+        facets = await Content.TrainingFacetsAsync();
+        var linked = facets.Where(f => f.ChapterId != null).Select(f => f.ChapterId!.Value).ToHashSet();
+        chapters = (await Content.ChaptersAsync()).Where(c => linked.Contains(c.Id)).ToList();
+        sources = facets.Select(f => f.Source).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().Order().ToList();
         recent = (await Sessions.ListAsync(take: 30)).Where(s => s.Type != SessionType.Exam).ToList();
-        await Recount();
+        Recount();
     }
 
-    private async Task OnDomainChanged(Domain? domain)
+    private void OnDomainChanged(Domain? domain)
     {
         request.Domain = domain;
         request.EcoTasks = request.EcoTasks.Where(code => domain is null || ecoTasks.Any(t => t.Code == code && t.Domain == domain)).ToList();
-        await Recount();
+        Recount();
     }
 
-    private async Task OnTasksChanged(IEnumerable<string> codes)
+    private void OnTasksChanged(IEnumerable<string> codes)
     {
         request.EcoTasks = codes.ToList();
-        await Recount();
+        Recount();
     }
 
-    private async Task Recount() => matching = await Sessions.CountMatchingAsync(request);
+    private void Recount() => matching = Count();
+
+    /// <summary>Nombre de questions actives avec les filtres courants, l'un d'eux pouvant être remplacé (comptes affichés dans les listes).</summary>
+    private int Count(Domain? domain = null, List<string>? tasks = null, Approach? approach = null, int? chapter = null, string? source = null,
+        bool noDomain = false, bool noTasks = false, bool noApproach = false, bool noChapter = false, bool noSource = false)
+    {
+        var d = noDomain ? null : domain ?? request.Domain;
+        var t = noTasks ? [] : tasks ?? request.EcoTasks;
+        var a = noApproach ? null : approach ?? request.Approach;
+        var c = noChapter ? null : chapter ?? request.ChapterId;
+        var src = noSource ? null : source ?? request.Source;
+        return facets!.Count(f => (d is null || f.Domain == d) && (t.Count == 0 || (f.EcoTask is not null && t.Contains(f.EcoTask)))
+            && (a is null || f.Approach == a) && (c is null || f.ChapterId == c) && (string.IsNullOrWhiteSpace(src) || f.Source == src));
+    }
+
+    private record Hint(string Text, Action Remove);
+
+    /// <summary>Le filtre à retirer pour retrouver des questions, s'il y en a un.</summary>
+    private Hint? Blocking()
+    {
+        var candidates = new (bool Active, string Name, Func<int> Count, Action Remove)[]
+        {
+            (request.ChapterId is not null, "Chapitre", () => Count(noChapter: true), () => request.ChapterId = null),
+            (!string.IsNullOrWhiteSpace(request.Source), "Source", () => Count(noSource: true), () => request.Source = null),
+            (request.EcoTasks.Count > 0, "Tâches ECO", () => Count(noTasks: true), () => request.EcoTasks = []),
+            (request.Approach is not null, "Approche", () => Count(noApproach: true), () => request.Approach = null),
+            (request.Domain is not null, "Domaine", () => Count(noDomain: true, noTasks: true), () => { request.Domain = null; request.EcoTasks = []; }),
+        };
+        foreach (var x in candidates.Where(x => x.Active))
+        {
+            var n = x.Count();
+            if (n > 0) return new Hint($"Sans « {x.Name} » : {n} question(s).", () => { x.Remove(); Recount(); });
+        }
+        return null;
+    }
 
     private async Task Start()
     {

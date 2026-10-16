@@ -36,6 +36,10 @@ La banque de questions ne fait plus partie du code : elle s'importe depuis **Ré
 4. **Envoyer** le contenu de `publish/interserver` à la racine du site (FTP ou gestionnaire de fichiers Plesk), activer **HTTPS** (Let's Encrypt dans Plesk) et ouvrir le site : la première visite propose de créer le compte.
 5. **Garder l'application éveillée** : sur un mutualisé, IIS arrête l'application après une vingtaine de minutes sans visite, ce qui suspend le rappel quotidien. Configurer un service de surveillance gratuit (UptimeRobot, cron-job.org…) qui appelle `https://ton-site/health` toutes les 5 minutes.
 
+En cas d'erreur au démarrage :
+- **Page « PMP Study ne démarre pas »** : l'application affiche la cause (base injoignable, identifiants SQL refusés, tables d'un essai précédent, chaîne de connexion absente) au lieu de l'erreur IIS 500.30. Corriger, puis redémarrer le site (Plesk, ou déposer et retirer `app_offline.htm`).
+- **Erreur 500.30 / 502.5 sans cette page** : le programme lui-même ne se lance pas. Dans `web.config`, passer `stdoutLogEnabled="true"`, créer le dossier `logs` à la racine du site, recharger la page, puis lire le fichier `logs/stdout_*.log` (et remettre `false` ensuite).
+
 À savoir :
 - **WebSockets** : si le serveur ne les active pas, Blazor bascule tout seul sur une connexion de secours (long polling), un peu moins réactive mais fonctionnelle.
 - **Mise à jour** : republier puis remplacer les fichiers. Pendant la copie, déposer un fichier `app_offline.htm` à la racine (IIS l'affiche et libère les fichiers verrouillés), puis le supprimer.

@@ -7,6 +7,8 @@ using PmpStudy.Web.Components;
 using PmpStudy.Web.Data;
 using PmpStudy.Web.Services;
 
+try
+{
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
@@ -91,6 +93,13 @@ app.MapGet("/health", () => Results.Text("ok")).AllowAnonymous();
 app.MapGet("/hors-ligne", () => Results.Redirect("/hors-ligne/index.html")).AllowAnonymous();
 
 app.Run();
+}
+catch (Exception ex) when (ex is not HostAbortedException)
+{
+    // Démarrage impossible (base injoignable, chaîne de connexion absente…) : sur IIS, au lieu de l'erreur
+    // générique 500.30, l'application démarre en mode dégradé et affiche la cause.
+    await StartupFailure.RunAsync(args, ex);
+}
 
 static Task ApiAwareRedirect(Microsoft.AspNetCore.Authentication.RedirectContext<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions> ctx, int status)
 {
